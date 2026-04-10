@@ -13,6 +13,11 @@ import { ensureVisible, replaceWholeDocument, resolveSvgDocument } from "./svg/d
 
 export type SvgTextOperation = "format" | "cleanup" | "compress";
 
+interface TransformOptions {
+  revealDocument?: boolean;
+  showMessage?: boolean;
+}
+
 const OPERATION_LABELS: Record<SvgTextOperation, string> = {
   format: "格式化",
   cleanup: "清理无用字符",
@@ -32,13 +37,16 @@ function transformByOperation(svg: string, operation: SvgTextOperation): string 
 async function applySvgTransform(
   document: vscode.TextDocument,
   transformer: (svg: string) => string,
-  successMessage: string
+  successMessage: string,
+  options?: TransformOptions
 ): Promise<boolean> {
   const source = document.getText();
   const next = transformer(source);
 
   if (next === source) {
-    vscode.window.showInformationMessage("SVG 内容没有变化。");
+    if (options?.showMessage !== false) {
+      vscode.window.showInformationMessage("SVG 内容没有变化。");
+    }
     return false;
   }
 
@@ -48,9 +56,18 @@ async function applySvgTransform(
     return false;
   }
 
-  await ensureVisible(document);
-  vscode.window.showInformationMessage(successMessage);
+  if (options?.revealDocument !== false) {
+    await ensureVisible(document);
+  }
+
+  if (options?.showMessage !== false) {
+    vscode.window.showInformationMessage(successMessage);
+  }
   return true;
+}
+
+async function getSvgDocument(uri?: vscode.Uri): Promise<vscode.TextDocument | undefined> {
+  return resolveSvgDocument(uri);
 }
 
 function validateColorInput(color: string): string | undefined {
@@ -59,17 +76,15 @@ function validateColorInput(color: string): string | undefined {
     return "颜色不能为空";
   }
 
-  const colorPatterns = [
+  const patterns = [
     /^#[0-9a-fA-F]{3,8}$/,
     /^rgba?\(\s*[^)]+\)$/,
     /^hsla?\(\s*[^)]+\)$/,
     /^[a-zA-Z]+$/
   ];
-
-  if (colorPatterns.some((pattern) => pattern.test(value))) {
-    return undefined;
-  }
-  return "请输入有效颜色（如 #0ea5e9 / rgb(14,165,233) / red）";
+  return patterns.some((pattern) => pattern.test(value))
+    ? undefined
+    : "请输入有效颜色（例如 #0ea5e9 / rgb(14,165,233) / red）";
 }
 
 function parseScales(input: string): number[] | undefined {
@@ -81,7 +96,6 @@ function parseScales(input: string): number[] | undefined {
   if (!values.length) {
     return undefined;
   }
-
   return Array.from(new Set(values)).sort((a, b) => a - b);
 }
 
@@ -93,7 +107,7 @@ async function readBaseWidth(svg: string): Promise<number | undefined> {
 
   const entered = await vscode.window.showInputBox({
     title: "输入基础宽度（像素）",
-    prompt: "用于多倍率 PNG 导出；如果 SVG 没有 width/viewBox，需要手动提供",
+    prompt: "用于多倍率 PNG 导出；如无 width/viewBox 请手动输入",
     value: "512",
     validateInput: (value) => {
       const parsed = Number(value.trim());
@@ -104,7 +118,6 @@ async function readBaseWidth(svg: string): Promise<number | undefined> {
   if (!entered) {
     return undefined;
   }
-
   return Number(entered.trim());
 }
 
@@ -120,8 +133,7 @@ async function chooseOutputDirectory(
   document: vscode.TextDocument
 ): Promise<vscode.Uri | undefined> {
   if (document.uri.scheme === "file") {
-    const parsed = path.parse(document.uri.fsPath);
-    return vscode.Uri.file(parsed.dir);
+    return vscode.Uri.file(path.parse(document.uri.fsPath).dir);
   }
 
   const picked = await vscode.window.showOpenDialog({
@@ -130,21 +142,13 @@ async function chooseOutputDirectory(
     canSelectMany: false,
     openLabel: "选择导出目录"
   });
-
   return picked?.[0];
-}
-
-async function getSvgDocument(uri?: vscode.Uri): Promise<vscode.TextDocument | undefined> {
-  const document = await resolveSvgDocument(uri);
-  if (!document) {
-    return undefined;
-  }
-  return document;
 }
 
 export async function runTextOperation(
   operation: SvgTextOperation,
-  uri?: vscode.Uri
+  uri?: vscode.Uri,
+  options?: TransformOptions
 ): Promise<boolean> {
   const document = await getSvgDocument(uri);
   if (!document) {
@@ -154,18 +158,22 @@ export async function runTextOperation(
   return applySvgTransform(
     document,
     (svg) => transformByOperation(svg, operation),
-    `SVG ${OPERATION_LABELS[operation]}完成。`
+    `SVG ${OPERATION_LABELS[operation]}完成。`,
+    options
   );
 }
 
-export async function runQuickRecolor(uri?: vscode.Uri): Promise<boolean> {
+export async function runQuickRecolor(
+  uri?: vscode.Uri,
+  options?: TransformOptions
+): Promise<boolean> {
   const document = await getSvgDocument(uri);
   if (!document) {
     return false;
   }
 
-  const original = document.getText();
-  const palette = extractColorPalette(original);
+  const source = document.getText();
+  const palette = extractColorPalette(source);
   const fromPick = await vscode.window.showQuickPick(
     [
       { label: "全部颜色", description: "替换 fill/stroke 等所有可识别颜色", picked: true },
@@ -176,7 +184,6 @@ export async function runQuickRecolor(uri?: vscode.Uri): Promise<boolean> {
       placeHolder: "默认替换全部颜色"
     }
   );
-
   if (!fromPick) {
     return false;
   }
@@ -187,7 +194,6 @@ export async function runQuickRecolor(uri?: vscode.Uri): Promise<boolean> {
     value: "#22c55e",
     validateInput: validateColorInput
   });
-
   if (!toColor) {
     return false;
   }
@@ -198,7 +204,8 @@ export async function runQuickRecolor(uri?: vscode.Uri): Promise<boolean> {
     (svg) => quickRecolorSvg(svg, toColor.trim(), fromColor),
     fromColor
       ? `已将颜色 ${fromColor} 替换为 ${toColor.trim()}。`
-      : `已将全部可识别颜色替换为 ${toColor.trim()}。`
+      : `已将全部可识别颜色替换为 ${toColor.trim()}。`,
+    options
   );
 }
 
@@ -219,7 +226,6 @@ export async function runExportPng(uri?: vscode.Uri): Promise<boolean> {
       return Number.isFinite(numeric) && numeric > 0 ? undefined : "请输入大于 0 的数字";
     }
   });
-
   if (widthInput === undefined) {
     return false;
   }
@@ -229,7 +235,6 @@ export async function runExportPng(uri?: vscode.Uri): Promise<boolean> {
     filters: { PNG: ["png"] },
     defaultUri: suggestPngUri(document)
   });
-
   if (!targetUri) {
     return false;
   }
@@ -276,6 +281,7 @@ export async function runExportPngVariants(uri?: vscode.Uri): Promise<boolean> {
 
   const sourcePath = document.uri.scheme === "file" ? document.uri.fsPath : document.uri.path;
   const baseName = path.parse(sourcePath).name || "image";
+
   const outputs: string[] = [];
   for (const scale of scales) {
     const width = Math.round(baseWidth * scale);
@@ -310,7 +316,6 @@ export async function runExtractPalette(uri?: vscode.Uri): Promise<boolean> {
       placeHolder: "选择一个颜色复制到剪贴板"
     }
   );
-
   if (!picked) {
     return false;
   }
@@ -350,11 +355,8 @@ export async function runInsertSnippet(): Promise<boolean> {
 
   const picked = await vscode.window.showQuickPick(
     snippets.map((item) => ({ label: item.label })),
-    {
-      title: "插入 SVG 代码片段"
-    }
+    { title: "插入 SVG 代码片段" }
   );
-
   if (!picked) {
     return false;
   }
