@@ -325,8 +325,45 @@ export async function runExtractPalette(uri?: vscode.Uri): Promise<boolean> {
   return true;
 }
 
-export async function runInsertSnippet(): Promise<boolean> {
-  const editor = vscode.window.activeTextEditor;
+function findInsertPositionNearSvgEnd(document: vscode.TextDocument): vscode.Position {
+  const source = document.getText();
+  const closingIndex = source.lastIndexOf("</svg>");
+  if (closingIndex >= 0) {
+    return document.positionAt(closingIndex);
+  }
+  return document.positionAt(source.length);
+}
+
+export async function runInsertSnippet(uri?: vscode.Uri): Promise<boolean> {
+  let editor = vscode.window.activeTextEditor;
+  let openedFromUri = false;
+
+  if (uri) {
+    const document = await getSvgDocument(uri);
+    if (!document) {
+      return false;
+    }
+    editor = await vscode.window.showTextDocument(document, {
+      viewColumn: vscode.ViewColumn.One,
+      preview: false,
+      preserveFocus: false
+    });
+    openedFromUri = true;
+  }
+
+  if (!editor || editor.document.languageId !== "svg") {
+    const document = await getSvgDocument(uri);
+    if (!document) {
+      return false;
+    }
+    editor = await vscode.window.showTextDocument(document, {
+      viewColumn: vscode.ViewColumn.One,
+      preview: false,
+      preserveFocus: false
+    });
+    openedFromUri = true;
+  }
+
   if (!editor || editor.document.languageId !== "svg") {
     vscode.window.showWarningMessage("请先打开一个 SVG 编辑器。");
     return false;
@@ -366,6 +403,12 @@ export async function runInsertSnippet(): Promise<boolean> {
     return false;
   }
 
+  if (openedFromUri) {
+    const insertPosition = findInsertPositionNearSvgEnd(editor.document);
+    editor.selection = new vscode.Selection(insertPosition, insertPosition);
+  }
+
   await editor.insertSnippet(new vscode.SnippetString(snippet.snippet));
   return true;
 }
+

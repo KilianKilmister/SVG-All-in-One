@@ -71,8 +71,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("svgAllInOne.extractPalette", async (arg?: unknown) => {
       await runExtractPalette(asUri(arg));
     }),
-    vscode.commands.registerCommand("svgAllInOne.insertSnippet", async () => {
-      await runInsertSnippet();
+    vscode.commands.registerCommand("svgAllInOne.insertSnippet", async (arg?: unknown) => {
+      await runInsertSnippet(asUri(arg));
     }),
     vscode.commands.registerCommand("svgAllInOne.editAttribute", async (attributeName?: string) => {
       await attributeSidebar.editAttribute(asAttributeName(attributeName));
@@ -89,3 +89,4 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   // Nothing to dispose manually.
 }
+

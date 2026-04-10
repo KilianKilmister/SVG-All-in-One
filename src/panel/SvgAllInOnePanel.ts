@@ -193,7 +193,7 @@ export class SvgAllInOnePanel {
     }
 
     if (message.type === "requestSave") {
-      await this.saveDraft(true);
+      await this.saveDraft(true, true);
       return;
     }
 
@@ -245,7 +245,7 @@ export class SvgAllInOnePanel {
       return;
     }
     if (operation === "insertSnippet") {
-      await runInsertSnippet();
+      await runInsertSnippet(uri);
     }
   }
 
@@ -256,9 +256,25 @@ export class SvgAllInOnePanel {
       .replace(/\sdata-aii-selected=(['"])(.*?)\1/g, "");
   }
 
-  private async saveDraft(showSavedMessage: boolean): Promise<boolean> {
-    if (!this.isDirty || !this.draftText) {
+  private async saveDraft(showSavedMessage: boolean, persistDocument = false): Promise<boolean> {
+    const persistCurrentDocument = async (): Promise<boolean> => {
+      if (!persistDocument) {
+        return true;
+      }
+      const saved = await this.currentDocument.save();
+      if (!saved) {
+        void vscode.window.showErrorMessage("保存失败：VS Code 未能保存当前 SVG 文件。");
+        return false;
+      }
       return true;
+    };
+
+    if (!this.isDirty || !this.draftText) {
+      const persisted = await persistCurrentDocument();
+      if (persisted && showSavedMessage) {
+        void vscode.window.showInformationMessage("预览修改已保存。");
+      }
+      return persisted;
     }
 
     const cleaned = this.stripPreviewRuntimeAttributes(this.draftText);
@@ -267,10 +283,19 @@ export class SvgAllInOnePanel {
     }
 
     if (cleaned.trim() === this.currentDocument.getText().trim()) {
+      const persisted = await persistCurrentDocument();
+      if (!persisted) {
+        return false;
+      }
+
       this.isDirty = false;
       this.draftText = cleaned;
       await this.panel.webview.postMessage({ type: "dirtyState", dirty: false });
       await this.panel.webview.postMessage({ type: "saved", text: cleaned });
+
+      if (showSavedMessage) {
+        void vscode.window.showInformationMessage("预览修改已保存。");
+      }
       return true;
     }
 
@@ -283,6 +308,11 @@ export class SvgAllInOnePanel {
       }
     } finally {
       this.syncingFromWebview = false;
+    }
+
+    const persisted = await persistCurrentDocument();
+    if (!persisted) {
+      return false;
     }
 
     this.isDirty = false;
@@ -310,7 +340,7 @@ export class SvgAllInOnePanel {
       return false;
     }
     if (choice === "保存") {
-      return this.saveDraft(false);
+      return this.saveDraft(false, true);
     }
 
     this.isDirty = false;
@@ -329,7 +359,7 @@ export class SvgAllInOnePanel {
         "不保存"
       );
       if (choice === "保存") {
-        await this.saveDraft(false);
+        await this.saveDraft(false, true);
       }
     }
 
@@ -669,12 +699,35 @@ export class SvgAllInOnePanel {
       if (!changed) target.setAttribute("fill", color);
       markDraftChanged();
     }
+    function openColorPicker(rawColor) {
+      colorPicker.value = normalizeColorForPicker(rawColor);
+      try {
+        if (typeof colorPicker.showPicker === "function") {
+          colorPicker.showPicker();
+          return;
+        }
+      } catch (_) {
+        // Ignore fallback errors and try a click-based picker open.
+      }
+
+      const prevLeft = colorPicker.style.left;
+      const prevTop = colorPicker.style.top;
+      const prevOpacity = colorPicker.style.opacity;
+      colorPicker.style.left = "12px";
+      colorPicker.style.top = "12px";
+      colorPicker.style.opacity = "0.01";
+      colorPicker.click();
+      requestAnimationFrame(() => {
+        colorPicker.style.left = prevLeft;
+        colorPicker.style.top = prevTop;
+        colorPicker.style.opacity = prevOpacity;
+      });
+    }
     function editSelectedColor() {
       const target = selectedElement();
       if (!target) return;
       const colors = collectColors(target);
-      colorPicker.value = normalizeColorForPicker(colors[0]);
-      colorPicker.click();
+      openColorPicker(colors[0]);
     }
     function extractSelectedColor() {
       const target = selectedElement();
@@ -754,6 +807,10 @@ export class SvgAllInOnePanel {
       applyColorToSelection(colorPicker.value);
       hideContextMenu();
     });
+    colorPicker.addEventListener("change", () => {
+      applyColorToSelection(colorPicker.value);
+      hideContextMenu();
+    });
     window.addEventListener("click", () => hideContextMenu());
     window.addEventListener("scroll", () => hideContextMenu(), { passive: true });
     window.addEventListener("keydown", (event) => {
@@ -801,3 +858,4 @@ function getNonce(): string {
   }
   return value;
 }
+
