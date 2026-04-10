@@ -417,6 +417,10 @@ export class SvgAllInOnePanel {
     .ctx .swatch.active { outline: 2px solid #0ea5e9; outline-offset: 1px; }
     .ctx .color-row { display: flex; align-items: center; gap: 6px; }
     .ctx .color-row input { flex: 1; height: 26px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 25%, transparent); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 0 8px; font-size: 12px; }
+    .ctx .native-color { width: 34px; min-width: 34px; height: 34px; padding: 0; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 25%, transparent); background: transparent; cursor: pointer; flex: 0 0 auto; }
+    .ctx .native-color::-webkit-color-swatch-wrapper { padding: 0; }
+    .ctx .native-color::-webkit-color-swatch { border: 0; border-radius: 4px; }
+    .ctx .native-color::-moz-color-swatch { border: 0; border-radius: 4px; }
     .ctx .apply-color { width: auto; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
   </style>
 </head>
@@ -448,6 +452,7 @@ export class SvgAllInOnePanel {
       <div id="menuColorSwatches" class="swatches"></div>
       <div class="color-row">
         <input id="menuColorValue" type="text" value="#22c55e" placeholder="#22c55e / rgb(34,197,94)" />
+        <input id="menuNativeColor" class="native-color" type="color" value="#22c55e" title="系统色盘" />
         <button id="menuApplyColor" class="apply-color">应用</button>
       </div>
     </div>
@@ -470,6 +475,7 @@ export class SvgAllInOnePanel {
     const menuColorEditor = document.getElementById("menuColorEditor");
     const menuColorSwatches = document.getElementById("menuColorSwatches");
     const menuColorValue = document.getElementById("menuColorValue");
+    const menuNativeColor = document.getElementById("menuNativeColor");
     const menuApplyColor = document.getElementById("menuApplyColor");
     const COLOR_ATTRS = ["fill", "stroke", "stop-color", "flood-color", "lighting-color", "color"];
     const DEFAULT_MENU_COLORS = ["#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#3b82f6", "#f97316", "#111827", "#4b5563", "#9ca3af", "#ffffff"];
@@ -738,11 +744,13 @@ export class SvgAllInOnePanel {
         return;
       }
       setError("");
+      menuNativeColor.value = normalizeColorForPicker(value);
       applyColorToSelection(value);
       hideContextMenu();
     }
     function openColorEditor(initialColor, suggestions) {
       menuColorValue.value = initialColor;
+      menuNativeColor.value = normalizeColorForPicker(initialColor);
       menuColorSwatches.innerHTML = "";
       const deduped = Array.from(new Set([initialColor, ...suggestions, ...DEFAULT_MENU_COLORS]))
         .map((item) => normalizeColorForPicker(item));
@@ -759,6 +767,7 @@ export class SvgAllInOnePanel {
         swatch.addEventListener("click", (event) => {
           event.stopPropagation();
           menuColorValue.value = color;
+          menuNativeColor.value = color;
           applyMenuColor();
         });
         menuColorSwatches.appendChild(swatch);
@@ -853,6 +862,14 @@ export class SvgAllInOnePanel {
         event.preventDefault();
         applyMenuColor();
       }
+    });
+    menuNativeColor.addEventListener("input", (event) => {
+      event.stopPropagation();
+      menuColorValue.value = menuNativeColor.value;
+    });
+    menuNativeColor.addEventListener("change", (event) => {
+      event.stopPropagation();
+      menuColorValue.value = menuNativeColor.value;
     });
     menuColorEditor.addEventListener("click", (event) => {
       event.stopPropagation();
