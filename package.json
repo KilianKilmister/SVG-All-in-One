@@ -1,0 +1,110 @@
+{
+  "name": "svg-all-in-one",
+  "displayName": "SVG All in One",
+  "description": "All-in-one SVG productivity toolkit for VS Code: split edit/preview, optimize, recolor, PNG export, interactive transform, and smart editing.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "Formatters",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onLanguage:svg",
+    "onCommand:svgAllInOne.openPanel",
+    "onCommand:svgAllInOne.exportPng",
+    "onCommand:svgAllInOne.exportPngVariants",
+    "onCommand:svgAllInOne.quickRecolor",
+    "onCommand:svgAllInOne.cleanupSvg",
+    "onCommand:svgAllInOne.compressSvg",
+    "onCommand:svgAllInOne.formatSvg",
+    "onCommand:svgAllInOne.extractPalette",
+    "onCommand:svgAllInOne.insertSnippet"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "svgAllInOne.openPanel",
+        "title": "SVG All in One: Open Split Editor + Preview"
+      },
+      {
+        "command": "svgAllInOne.exportPng",
+        "title": "SVG All in One: Export PNG"
+      },
+      {
+        "command": "svgAllInOne.exportPngVariants",
+        "title": "SVG All in One: Export PNG Variants (@1x/@2x/@3x)"
+      },
+      {
+        "command": "svgAllInOne.quickRecolor",
+        "title": "SVG All in One: Quick Recolor"
+      },
+      {
+        "command": "svgAllInOne.cleanupSvg",
+        "title": "SVG All in One: Cleanup Useless XML"
+      },
+      {
+        "command": "svgAllInOne.compressSvg",
+        "title": "SVG All in One: Compress SVG (SVGO)"
+      },
+      {
+        "command": "svgAllInOne.formatSvg",
+        "title": "SVG All in One: Format SVG"
+      },
+      {
+        "command": "svgAllInOne.extractPalette",
+        "title": "SVG All in One: Extract Color Palette"
+      },
+      {
+        "command": "svgAllInOne.insertSnippet",
+        "title": "SVG All in One: Insert SVG Snippet"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "svgAllInOne.openPanel",
+          "when": "resourceExtname == .svg",
+          "group": "navigation@1"
+        },
+        {
+          "command": "svgAllInOne.exportPng",
+          "when": "resourceExtname == .svg",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "svgAllInOne.openPanel",
+          "when": "resourceExtname == .svg",
+          "group": "navigation"
+        },
+        {
+          "command": "svgAllInOne.exportPng",
+          "when": "resourceExtname == .svg",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "svgo": "^3.3.2",
+    "xml-formatter": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.8.2"
+  }
+}
