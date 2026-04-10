@@ -407,9 +407,17 @@ export class SvgAllInOnePanel {
     #previewHost [data-aii-id][data-aii-selected="1"] { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px #0ea5e9); cursor: grab; }
     #previewHost.dragging [data-aii-id][data-aii-selected="1"] { cursor: grabbing; }
     .error { min-height: 20px; padding: 2px 10px 8px; color: #fca5a5; font-size: 12px; }
-    .ctx { position: fixed; z-index: 20; display: none; min-width: 120px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--vscode-editor-background) 90%, #0b1220); box-shadow: 0 10px 20px rgba(0,0,0,.28); }
+    .ctx { position: fixed; z-index: 20; display: none; min-width: 220px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--vscode-editor-background) 90%, #0b1220); box-shadow: 0 10px 20px rgba(0,0,0,.28); }
     .ctx button { width: 100%; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); border-radius: 0; text-align: left; background: transparent; padding: 8px 10px; }
     .ctx button:last-child { border-bottom: 0; }
+    .ctx .color-editor { display: none; padding: 8px 10px; border-top: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); }
+    .ctx .color-editor.visible { display: block; }
+    .ctx .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 8px; }
+    .ctx .swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 28%, transparent); cursor: pointer; }
+    .ctx .swatch.active { outline: 2px solid #0ea5e9; outline-offset: 1px; }
+    .ctx .color-row { display: flex; align-items: center; gap: 6px; }
+    .ctx .color-row input { flex: 1; height: 26px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 25%, transparent); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 0 8px; font-size: 12px; }
+    .ctx .apply-color { width: auto; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
   </style>
 </head>
 <body>
@@ -436,8 +444,14 @@ export class SvgAllInOnePanel {
   <div class="ctx" id="contextMenu">
     <button id="menuEditColor">修改颜色</button>
     <button id="menuExtractColor">提取颜色</button>
+    <div id="menuColorEditor" class="color-editor">
+      <div id="menuColorSwatches" class="swatches"></div>
+      <div class="color-row">
+        <input id="menuColorValue" type="text" value="#22c55e" placeholder="#22c55e / rgb(34,197,94)" />
+        <button id="menuApplyColor" class="apply-color">应用</button>
+      </div>
+    </div>
   </div>
-  <input id="colorPicker" type="color" style="position:fixed;left:-9999px;top:-9999px;opacity:0;" />
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -453,8 +467,12 @@ export class SvgAllInOnePanel {
     const contextMenu = document.getElementById("contextMenu");
     const menuEditColor = document.getElementById("menuEditColor");
     const menuExtractColor = document.getElementById("menuExtractColor");
-    const colorPicker = document.getElementById("colorPicker");
+    const menuColorEditor = document.getElementById("menuColorEditor");
+    const menuColorSwatches = document.getElementById("menuColorSwatches");
+    const menuColorValue = document.getElementById("menuColorValue");
+    const menuApplyColor = document.getElementById("menuApplyColor");
     const COLOR_ATTRS = ["fill", "stroke", "stop-color", "flood-color", "lighting-color", "color"];
+    const DEFAULT_MENU_COLORS = ["#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#3b82f6", "#f97316", "#111827", "#4b5563", "#9ca3af", "#ffffff"];
 
     const state = {
       rawSvgText: "",
@@ -471,8 +489,16 @@ export class SvgAllInOnePanel {
       dirtyStateNode.textContent = dirty ? "未保存" : "已保存";
       dirtyStateNode.className = dirty ? "dirty" : "saved";
     }
-    function hideContextMenu() { contextMenu.style.display = "none"; }
+    function hideColorEditor() {
+      menuColorEditor.classList.remove("visible");
+      menuColorSwatches.innerHTML = "";
+    }
+    function hideContextMenu() {
+      hideColorEditor();
+      contextMenu.style.display = "none";
+    }
     function showContextMenu(x, y) {
+      hideColorEditor();
       contextMenu.style.left = x + "px";
       contextMenu.style.top = y + "px";
       contextMenu.style.display = "block";
@@ -699,35 +725,51 @@ export class SvgAllInOnePanel {
       if (!changed) target.setAttribute("fill", color);
       markDraftChanged();
     }
-    function openColorPicker(rawColor) {
-      colorPicker.value = normalizeColorForPicker(rawColor);
-      try {
-        if (typeof colorPicker.showPicker === "function") {
-          colorPicker.showPicker();
-          return;
-        }
-      } catch (_) {
-        // Ignore fallback errors and try a click-based picker open.
+    function isValidCssColor(value) {
+      const probe = document.createElement("span");
+      probe.style.color = "";
+      probe.style.color = value.trim();
+      return Boolean(probe.style.color);
+    }
+    function applyMenuColor() {
+      const value = menuColorValue.value.trim();
+      if (!isValidCssColor(value)) {
+        setError("颜色格式无效，请输入如 #22c55e 或 rgb(34,197,94)");
+        return;
       }
-
-      const prevLeft = colorPicker.style.left;
-      const prevTop = colorPicker.style.top;
-      const prevOpacity = colorPicker.style.opacity;
-      colorPicker.style.left = "12px";
-      colorPicker.style.top = "12px";
-      colorPicker.style.opacity = "0.01";
-      colorPicker.click();
-      requestAnimationFrame(() => {
-        colorPicker.style.left = prevLeft;
-        colorPicker.style.top = prevTop;
-        colorPicker.style.opacity = prevOpacity;
-      });
+      setError("");
+      applyColorToSelection(value);
+      hideContextMenu();
+    }
+    function openColorEditor(initialColor, suggestions) {
+      menuColorValue.value = initialColor;
+      menuColorSwatches.innerHTML = "";
+      const deduped = Array.from(new Set([initialColor, ...suggestions, ...DEFAULT_MENU_COLORS]))
+        .map((item) => normalizeColorForPicker(item));
+      const activeColor = normalizeColorForPicker(initialColor);
+      for (const color of deduped) {
+        const swatch = document.createElement("button");
+        swatch.type = "button";
+        swatch.className = "swatch";
+        swatch.style.background = color;
+        if (color === activeColor) {
+          swatch.classList.add("active");
+        }
+        swatch.title = color;
+        swatch.addEventListener("click", (event) => {
+          event.stopPropagation();
+          menuColorValue.value = color;
+          applyMenuColor();
+        });
+        menuColorSwatches.appendChild(swatch);
+      }
+      menuColorEditor.classList.add("visible");
     }
     function editSelectedColor() {
       const target = selectedElement();
       if (!target) return;
       const colors = collectColors(target);
-      openColorPicker(colors[0]);
+      openColorEditor(normalizeColorForPicker(colors[0]), colors);
     }
     function extractSelectedColor() {
       const target = selectedElement();
@@ -796,20 +838,24 @@ export class SvgAllInOnePanel {
     deleteButton.addEventListener("click", deleteSelected);
     menuEditColor.addEventListener("click", (event) => {
       event.stopPropagation();
-      hideContextMenu();
       editSelectedColor();
     });
     menuExtractColor.addEventListener("click", (event) => {
       event.stopPropagation();
       extractSelectedColor();
     });
-    colorPicker.addEventListener("input", () => {
-      applyColorToSelection(colorPicker.value);
-      hideContextMenu();
+    menuApplyColor.addEventListener("click", (event) => {
+      event.stopPropagation();
+      applyMenuColor();
     });
-    colorPicker.addEventListener("change", () => {
-      applyColorToSelection(colorPicker.value);
-      hideContextMenu();
+    menuColorValue.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyMenuColor();
+      }
+    });
+    menuColorEditor.addEventListener("click", (event) => {
+      event.stopPropagation();
     });
     window.addEventListener("click", () => hideContextMenu());
     window.addEventListener("scroll", () => hideContextMenu(), { passive: true });
