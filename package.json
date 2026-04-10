@@ -16,6 +16,9 @@
   "activationEvents": [
     "onLanguage:svg",
     "onCommand:svgAllInOne.openPanel",
+    "onCommand:svgAllInOne.editAttribute",
+    "onCommand:svgAllInOne.addAttribute",
+    "onCommand:svgAllInOne.removeAttribute",
     "onCommand:svgAllInOne.exportPng",
     "onCommand:svgAllInOne.exportPngVariants",
     "onCommand:svgAllInOne.quickRecolor",
@@ -63,8 +66,28 @@
       {
         "command": "svgAllInOne.insertSnippet",
         "title": "SVG All in One: Insert SVG Snippet"
+      },
+      {
+        "command": "svgAllInOne.editAttribute",
+        "title": "SVG All in One: Edit Selected Attribute"
+      },
+      {
+        "command": "svgAllInOne.addAttribute",
+        "title": "SVG All in One: Add Attribute"
+      },
+      {
+        "command": "svgAllInOne.removeAttribute",
+        "title": "SVG All in One: Remove Attribute"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "svgAllInOne.attributePanel",
+          "name": "SVG Selected Node Attributes"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
@@ -89,6 +112,30 @@
           "when": "resourceExtname == .svg",
           "group": "navigation"
         }
+      ],
+      "view/title": [
+        {
+          "command": "svgAllInOne.addAttribute",
+          "when": "view == svgAllInOne.attributePanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "svgAllInOne.removeAttribute",
+          "when": "view == svgAllInOne.attributePanel",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "svgAllInOne.editAttribute",
+          "when": "view == svgAllInOne.attributePanel && viewItem == svgAttribute",
+          "group": "inline@1"
+        },
+        {
+          "command": "svgAllInOne.removeAttribute",
+          "when": "view == svgAllInOne.attributePanel && viewItem == svgAttribute",
+          "group": "inline@2"
+        }
       ]
     }
   },
@@ -99,6 +146,7 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@xmldom/xmldom": "^0.8.10",
     "svgo": "^3.3.2",
     "xml-formatter": "^3.6.7"
   },

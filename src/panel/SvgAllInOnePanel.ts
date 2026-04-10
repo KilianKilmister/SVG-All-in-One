@@ -9,7 +9,9 @@ import {
   runTextOperation,
   type SvgTextOperation
 } from "../commands";
+import { SvgAttributeSidebarProvider } from "./SvgAttributeSidebarProvider";
 import { isSvgDocument, replaceWholeDocument, resolveSvgDocument } from "../svg/documentHelpers";
+import { type SvgNodePath } from "../svg/svgDom";
 
 type PanelOperation =
   | "format"
@@ -25,6 +27,9 @@ interface PanelMessage {
   type: string;
   text?: string;
   operation?: PanelOperation;
+  nodePath?: SvgNodePath;
+  tagName?: string;
+  attributes?: Record<string, string>;
 }
 
 export class SvgAllInOnePanel {
@@ -32,6 +37,7 @@ export class SvgAllInOnePanel {
 
   public static async createOrShow(
     context: vscode.ExtensionContext,
+    attributeSidebar: SvgAttributeSidebarProvider,
     uri?: vscode.Uri
   ): Promise<void> {
     const document = await resolveSvgDocument(uri);
@@ -59,23 +65,31 @@ export class SvgAllInOnePanel {
       }
     );
 
-    SvgAllInOnePanel.currentPanel = new SvgAllInOnePanel(context, panel, document);
+    SvgAllInOnePanel.currentPanel = new SvgAllInOnePanel(
+      context,
+      panel,
+      document,
+      attributeSidebar
+    );
   }
 
   private readonly disposables: vscode.Disposable[] = [];
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
+  private readonly attributeSidebar: SvgAttributeSidebarProvider;
   private currentDocument: vscode.TextDocument;
   private syncingFromWebview = false;
 
   private constructor(
     context: vscode.ExtensionContext,
     panel: vscode.WebviewPanel,
-    document: vscode.TextDocument
+    document: vscode.TextDocument,
+    attributeSidebar: SvgAttributeSidebarProvider
   ) {
     this.context = context;
     this.panel = panel;
     this.currentDocument = document;
+    this.attributeSidebar = attributeSidebar;
 
     this.panel.title = `SVG All in One - ${path.basename(document.uri.fsPath || document.uri.path)}`;
     this.panel.webview.html = this.getWebviewHtml(this.panel.webview);
@@ -98,6 +112,7 @@ export class SvgAllInOnePanel {
           return;
         }
         this.currentDocument = event.document;
+        this.attributeSidebar.tryRefreshSelectionFromDocument(event.document);
         if (this.syncingFromWebview) {
           return;
         }
@@ -148,6 +163,7 @@ export class SvgAllInOnePanel {
   private async setDocument(document: vscode.TextDocument): Promise<void> {
     this.currentDocument = document;
     this.panel.title = `SVG All in One - ${path.basename(document.uri.fsPath || document.uri.path)}`;
+    this.attributeSidebar.clearSelection();
     await this.pushDocumentToWebview();
   }
 
@@ -168,6 +184,26 @@ export class SvgAllInOnePanel {
       } finally {
         this.syncingFromWebview = false;
       }
+      return;
+    }
+
+    if (
+      message.type === "selectionChanged" &&
+      Array.isArray(message.nodePath) &&
+      typeof message.tagName === "string" &&
+      message.attributes
+    ) {
+      this.attributeSidebar.setSelection(
+        this.currentDocument,
+        message.nodePath,
+        message.tagName,
+        message.attributes
+      );
+      return;
+    }
+
+    if (message.type === "selectionCleared") {
+      this.attributeSidebar.clearSelection();
       return;
     }
 
@@ -569,10 +605,52 @@ export class SvgAllInOnePanel {
       }
     }
 
+    function getElementPath(element) {
+      const path = [];
+      let current = element;
+      while (current && current.parentElement && current.parentElement !== state.svgRoot) {
+        const parent = current.parentElement;
+        const siblings = Array.from(parent.children).filter((child) => child.nodeType === 1);
+        path.unshift(siblings.indexOf(current));
+        current = parent;
+      }
+      if (current && current.parentElement === state.svgRoot) {
+        const rootChildren = Array.from(state.svgRoot.children).filter((child) => child.nodeType === 1);
+        path.unshift(rootChildren.indexOf(current));
+      }
+      return path;
+    }
+
+    function readElementAttributes(element) {
+      const attrs = {};
+      for (const attr of element.attributes) {
+        if (attr.name.startsWith("data-aii-")) {
+          continue;
+        }
+        attrs[attr.name] = attr.value;
+      }
+      return attrs;
+    }
+
+    function postSelectionState() {
+      const target = pickSelectedElement();
+      if (!target) {
+        vscode.postMessage({ type: "selectionCleared" });
+        return;
+      }
+      vscode.postMessage({
+        type: "selectionChanged",
+        nodePath: getElementPath(target),
+        tagName: target.tagName,
+        attributes: readElementAttributes(target)
+      });
+    }
+
     function clearSelection() {
       if (!state.svgRoot) {
         state.selectedId = undefined;
         updateSelectionLabel();
+        postSelectionState();
         return;
       }
       const selected = state.svgRoot.querySelector('[data-aii-selected="1"]');
@@ -581,6 +659,7 @@ export class SvgAllInOnePanel {
       }
       state.selectedId = undefined;
       updateSelectionLabel();
+      postSelectionState();
     }
 
     function selectElement(element) {
@@ -597,6 +676,7 @@ export class SvgAllInOnePanel {
       element.setAttribute("data-aii-selected", "1");
       state.selectedId = id;
       updateSelectionLabel();
+      postSelectionState();
     }
 
     function serializeAndSync() {
@@ -608,6 +688,7 @@ export class SvgAllInOnePanel {
       const next = state.xmlDeclaration ? state.xmlDeclaration + "\\n" + body : body;
       sourceEditor.value = next;
       updatePalette(next);
+      postSelectionState();
       debouncePush();
     }
 
@@ -839,6 +920,7 @@ export class SvgAllInOnePanel {
 
   private dispose(): void {
     SvgAllInOnePanel.currentPanel = undefined;
+    this.attributeSidebar.clearSelection();
     while (this.disposables.length) {
       const disposable = this.disposables.pop();
       disposable?.dispose();

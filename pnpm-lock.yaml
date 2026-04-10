@@ -11,6 +11,9 @@ importers:
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
+      '@xmldom/xmldom':
+        specifier: ^0.8.10
+        version: 0.8.12
       svgo:
         specifier: ^3.3.2
         version: 3.3.3
@@ -115,6 +118,10 @@ packages:
 
   '@types/vscode@1.115.0':
     resolution: {integrity: sha512-/M8cdznOlqtMqduHKKlIF00v4eum4ZWKgn8YoPRKcN6PDdvoWeeqDaQSnw63ipDbq1Uzz78Wndk/d0uSPwORfA==}
+
+  '@xmldom/xmldom@0.8.12':
+    resolution: {integrity: sha512-9k/gHF6n/pAi/9tqr3m3aqkuiNosYTurLLUtc7xQ9sxB/wm7WPygCv8GYa6mS0fLJEHhqMC1ATYhz++U/lRHqg==}
+    engines: {node: '>=10.0.0'}
 
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
@@ -258,6 +265,8 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/vscode@1.115.0': {}
+
+  '@xmldom/xmldom@0.8.12': {}
 
   boolbase@1.0.0: {}
 

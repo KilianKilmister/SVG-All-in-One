@@ -7,7 +7,9 @@ import {
   runQuickRecolor,
   runTextOperation
 } from "./commands";
+import { SvgAttributeSidebarProvider } from "./panel/SvgAttributeSidebarProvider";
 import { SvgAllInOnePanel } from "./panel/SvgAllInOnePanel";
+import { registerSvgDiagnostics } from "./providers/svgDiagnosticsProvider";
 import { registerSvgCompletionProvider } from "./providers/svgCompletionProvider";
 
 function asUri(input: unknown): vscode.Uri | undefined {
@@ -23,12 +25,30 @@ function asUri(input: unknown): vscode.Uri | undefined {
   return undefined;
 }
 
+function asAttributeName(input: unknown): string | undefined {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input && typeof input === "object" && "attributeName" in input) {
+    const value = (input as { attributeName?: unknown }).attributeName;
+    return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
+  const attributeSidebar = new SvgAttributeSidebarProvider();
+
   context.subscriptions.push(registerSvgCompletionProvider());
+  context.subscriptions.push(registerSvgDiagnostics(context));
+  context.subscriptions.push(
+    attributeSidebar,
+    vscode.window.registerTreeDataProvider("svgAllInOne.attributePanel", attributeSidebar)
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("svgAllInOne.openPanel", async (arg?: unknown) => {
-      await SvgAllInOnePanel.createOrShow(context, asUri(arg));
+      await SvgAllInOnePanel.createOrShow(context, attributeSidebar, asUri(arg));
     }),
     vscode.commands.registerCommand("svgAllInOne.formatSvg", async (arg?: unknown) => {
       await runTextOperation("format", asUri(arg));
@@ -53,6 +73,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("svgAllInOne.insertSnippet", async () => {
       await runInsertSnippet();
+    }),
+    vscode.commands.registerCommand("svgAllInOne.editAttribute", async (attributeName?: string) => {
+      await attributeSidebar.editAttribute(asAttributeName(attributeName));
+    }),
+    vscode.commands.registerCommand("svgAllInOne.addAttribute", async () => {
+      await attributeSidebar.addAttribute();
+    }),
+    vscode.commands.registerCommand("svgAllInOne.removeAttribute", async (attributeName?: string) => {
+      await attributeSidebar.removeAttribute(asAttributeName(attributeName));
     })
   );
 }
