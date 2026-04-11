@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "RobinZhao",
   "license": "MIT",
+  "icon": "resources/marketplace/icon.png",
+  "galleryBanner": {
+    "color": "#0F172A",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
