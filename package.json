@@ -166,7 +166,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
-    "package:vsix": "npx @vscode/vsce package --no-dependencies"
+    "package:vsix": "npx @vscode/vsce package --no-dependencies",
+    "publish:vsix": "npx @vscode/vsce publish --no-dependencies"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
