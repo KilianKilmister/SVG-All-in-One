@@ -3,7 +3,6 @@ import * as vscode from "vscode";
 import {
   runExportPng,
   runExportPngVariants,
-  runInsertSnippet,
   runTextOperation,
   type SvgTextOperation
 } from "../commands";
@@ -16,8 +15,7 @@ type PanelOperation =
   | "cleanup"
   | "compress"
   | "exportPng"
-  | "exportPngVariants"
-  | "insertSnippet";
+  | "exportPngVariants";
 
 interface PanelMessage {
   type: string;
@@ -244,9 +242,6 @@ export class SvgAllInOnePanel {
       await runExportPngVariants(uri);
       return;
     }
-    if (operation === "insertSnippet") {
-      await runInsertSnippet(uri);
-    }
   }
 
   private stripPreviewRuntimeAttributes(svgText: string): string {
@@ -432,7 +427,6 @@ export class SvgAllInOnePanel {
         <button data-op="format">格式化</button>
         <button data-op="cleanup">清理字符</button>
         <button data-op="compress">压缩</button>
-        <button data-op="insertSnippet">插入片段</button>
         <button id="rotateLeft" disabled>左转 15°</button>
         <button id="rotateRight" disabled>右转 15°</button>
         <button id="deleteElement" disabled>删除元素</button>

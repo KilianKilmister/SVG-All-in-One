@@ -25,8 +25,7 @@
     "onCommand:svgAllInOne.cleanupSvg",
     "onCommand:svgAllInOne.compressSvg",
     "onCommand:svgAllInOne.formatSvg",
-    "onCommand:svgAllInOne.extractPalette",
-    "onCommand:svgAllInOne.insertSnippet"
+    "onCommand:svgAllInOne.extractPalette"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -62,10 +61,6 @@
       {
         "command": "svgAllInOne.extractPalette",
         "title": "SVG All in One: Extract Color Palette"
-      },
-      {
-        "command": "svgAllInOne.insertSnippet",
-        "title": "SVG All in One: Insert SVG Snippet"
       },
       {
         "command": "svgAllInOne.editAttribute",

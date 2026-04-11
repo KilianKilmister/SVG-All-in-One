@@ -3,7 +3,6 @@ import {
   runExportPng,
   runExportPngVariants,
   runExtractPalette,
-  runInsertSnippet,
   runQuickRecolor,
   runTextOperation
 } from "./commands";
@@ -70,9 +69,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("svgAllInOne.extractPalette", async (arg?: unknown) => {
       await runExtractPalette(asUri(arg));
-    }),
-    vscode.commands.registerCommand("svgAllInOne.insertSnippet", async (arg?: unknown) => {
-      await runInsertSnippet(asUri(arg));
     }),
     vscode.commands.registerCommand("svgAllInOne.editAttribute", async (attributeName?: string) => {
       await attributeSidebar.editAttribute(asAttributeName(attributeName));
