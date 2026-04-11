@@ -7,8 +7,8 @@
   "license": "MIT",
   "icon": "resources/marketplace/icon.png",
   "galleryBanner": {
-    "color": "#0F172A",
-    "theme": "dark"
+    "color": "#F1F5F9",
+    "theme": "light"
   },
   "engines": {
     "vscode": "^1.95.0"
