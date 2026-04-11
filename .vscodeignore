@@ -8,3 +8,4 @@ testFolder/**
 *.vsix
 pnpm-lock.yaml
 .gitignore
+resources/marketplace/options/**
