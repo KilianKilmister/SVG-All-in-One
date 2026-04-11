@@ -941,6 +941,107 @@ export class SvgAllInOnePanel {
         target.removeAttribute("transform");
       }
     }
+    function cloneDomMatrix(matrix) {
+      return new DOMMatrix([matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]);
+    }
+    function getCurrentTransformMatrix(target) {
+      if (!target || !target.transform || !target.transform.baseVal) {
+        return new DOMMatrix();
+      }
+      const consolidated = target.transform.baseVal.consolidate();
+      if (!consolidated) {
+        return new DOMMatrix();
+      }
+      const matrix = consolidated.matrix;
+      return new DOMMatrix([matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]);
+    }
+    function getTargetPivot(target) {
+      try {
+        const bbox = target.getBBox();
+        return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+      } catch (_) {
+        return undefined;
+      }
+    }
+    function isIdentityMatrix(matrix) {
+      return (
+        Math.abs(matrix.a - 1) < TRANSFORM_EPSILON &&
+        Math.abs(matrix.b) < TRANSFORM_EPSILON &&
+        Math.abs(matrix.c) < TRANSFORM_EPSILON &&
+        Math.abs(matrix.d - 1) < TRANSFORM_EPSILON &&
+        Math.abs(matrix.e) < TRANSFORM_EPSILON &&
+        Math.abs(matrix.f) < TRANSFORM_EPSILON
+      );
+    }
+    function getUniformScaleFromMatrix(matrix) {
+      const value = Math.hypot(matrix.a, matrix.b);
+      return Number.isFinite(value) && value > TRANSFORM_EPSILON ? value : 1;
+    }
+    function serializeMatrixTransform(target, matrix) {
+      if (isIdentityMatrix(matrix)) {
+        return "";
+      }
+      const pivot = getTargetPivot(target);
+      if (!pivot) {
+        return (
+          "matrix(" +
+          formatNumber(matrix.a) + " " +
+          formatNumber(matrix.b) + " " +
+          formatNumber(matrix.c) + " " +
+          formatNumber(matrix.d) + " " +
+          formatNumber(matrix.e) + " " +
+          formatNumber(matrix.f) +
+          ")"
+        );
+      }
+      const scaleX = Math.hypot(matrix.a, matrix.b);
+      const scaleY = scaleX > TRANSFORM_EPSILON ? (matrix.a * matrix.d - matrix.b * matrix.c) / scaleX : 1;
+      const shear = scaleX > TRANSFORM_EPSILON ? (matrix.a * matrix.c + matrix.b * matrix.d) / (scaleX * scaleX) : 0;
+      const canDecompose =
+        Number.isFinite(scaleX) &&
+        Number.isFinite(scaleY) &&
+        Math.abs(scaleX - scaleY) < 1e-3 &&
+        Math.abs(shear) < 1e-3;
+      if (!canDecompose) {
+        return (
+          "matrix(" +
+          formatNumber(matrix.a) + " " +
+          formatNumber(matrix.b) + " " +
+          formatNumber(matrix.c) + " " +
+          formatNumber(matrix.d) + " " +
+          formatNumber(matrix.e) + " " +
+          formatNumber(matrix.f) +
+          ")"
+        );
+      }
+      const angle = normalizeAngle((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI);
+      const scale = (scaleX + scaleY) / 2;
+      const tx = matrix.e - pivot.x + matrix.a * pivot.x + matrix.c * pivot.y;
+      const ty = matrix.f - pivot.y + matrix.b * pivot.x + matrix.d * pivot.y;
+      const parts = [];
+      if (Math.abs(tx) >= TRANSFORM_EPSILON || Math.abs(ty) >= TRANSFORM_EPSILON) {
+        parts.push("translate(" + formatNumber(tx) + " " + formatNumber(ty) + ")");
+      }
+      if (Math.abs(scale - 1) >= TRANSFORM_EPSILON || Math.abs(angle) >= TRANSFORM_EPSILON) {
+        parts.push("translate(" + formatNumber(pivot.x) + " " + formatNumber(pivot.y) + ")");
+        if (Math.abs(angle) >= TRANSFORM_EPSILON) {
+          parts.push("rotate(" + formatNumber(angle) + ")");
+        }
+        if (Math.abs(scale - 1) >= TRANSFORM_EPSILON) {
+          parts.push("scale(" + formatNumber(scale) + ")");
+        }
+        parts.push("translate(" + formatNumber(-pivot.x) + " " + formatNumber(-pivot.y) + ")");
+      }
+      return parts.join(" ").trim();
+    }
+    function applyMatrixTransform(target, matrix) {
+      const transformed = serializeMatrixTransform(target, matrix);
+      if (transformed) {
+        target.setAttribute("transform", transformed);
+      } else {
+        target.removeAttribute("transform");
+      }
+    }
 
     function tagElements(root) {
       let id = 0;
@@ -1094,7 +1195,7 @@ export class SvgAllInOnePanel {
         pointerId: event.pointerId,
         originX: from.x,
         originY: from.y,
-        baseTransformModel: parseTransform(target.getAttribute("transform") || ""),
+        baseTransformMatrix: getCurrentTransformMatrix(target),
         moved: false
       };
       state.dragging = true;
@@ -1109,10 +1210,9 @@ export class SvgAllInOnePanel {
       const now = toSvgPoint(state.svgRoot, event.clientX, event.clientY);
       const dx = now.x - state.drag.originX;
       const dy = now.y - state.drag.originY;
-      const nextModel = cloneTransformModel(state.drag.baseTransformModel);
-      nextModel.translateX += dx;
-      nextModel.translateY += dy;
-      applyTransform(target, nextModel);
+      const nextMatrix = cloneDomMatrix(state.drag.baseTransformMatrix);
+      nextMatrix.translateSelf(dx, dy);
+      applyMatrixTransform(target, nextMatrix);
       if (Math.abs(dx) >= TRANSFORM_EPSILON || Math.abs(dy) >= TRANSFORM_EPSILON) {
         state.drag.moved = true;
       }
@@ -1130,35 +1230,32 @@ export class SvgAllInOnePanel {
     function rotateSelected(delta) {
       const target = selectedElement();
       if (!target) return;
-      let bbox;
-      try { bbox = target.getBBox(); } catch (_) { return; }
-      const model = parseTransform(target.getAttribute("transform") || "");
-      model.rotateAngle += delta;
-      model.rotateCx = bbox.x + bbox.width / 2;
-      model.rotateCy = bbox.y + bbox.height / 2;
-      model.hasRotateCenter = true;
-      applyTransform(target, model);
+      const pivot = getTargetPivot(target);
+      if (!pivot) return;
+      const nextMatrix = getCurrentTransformMatrix(target);
+      nextMatrix.translateSelf(pivot.x, pivot.y);
+      nextMatrix.rotateSelf(delta);
+      nextMatrix.translateSelf(-pivot.x, -pivot.y);
+      applyMatrixTransform(target, nextMatrix);
       markDraftChanged();
     }
     function scaleSelected(deltaScale) {
       const target = selectedElement();
       if (!target || !Number.isFinite(deltaScale) || deltaScale === 0) return;
-      let bbox;
-      try { bbox = target.getBBox(); } catch (_) { return; }
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
-      const model = parseTransform(target.getAttribute("transform") || "");
-      const oldScaleX = Math.abs(model.scaleX) < TRANSFORM_EPSILON ? 1 : model.scaleX;
-      const oldScaleY = Math.abs(model.scaleY) < TRANSFORM_EPSILON ? 1 : model.scaleY;
-      const nextScaleX = Math.max(0.05, oldScaleX + deltaScale);
-      const nextScaleY = Math.max(0.05, oldScaleY + deltaScale);
-      const ratioX = nextScaleX / oldScaleX;
-      const ratioY = nextScaleY / oldScaleY;
-      model.translateX += cx * (1 - ratioX);
-      model.translateY += cy * (1 - ratioY);
-      model.scaleX = nextScaleX;
-      model.scaleY = nextScaleY;
-      applyTransform(target, model);
+      const pivot = getTargetPivot(target);
+      if (!pivot) return;
+      const currentMatrix = getCurrentTransformMatrix(target);
+      const oldScale = getUniformScaleFromMatrix(currentMatrix);
+      const nextScale = Math.max(0.05, oldScale + deltaScale);
+      const factor = nextScale / oldScale;
+      if (!Number.isFinite(factor) || Math.abs(factor - 1) < TRANSFORM_EPSILON) {
+        return;
+      }
+      const nextMatrix = cloneDomMatrix(currentMatrix);
+      nextMatrix.translateSelf(pivot.x, pivot.y);
+      nextMatrix.scaleSelf(factor);
+      nextMatrix.translateSelf(-pivot.x, -pivot.y);
+      applyMatrixTransform(target, nextMatrix);
       markDraftChanged();
     }
     function deleteSelected() {
@@ -1171,10 +1268,9 @@ export class SvgAllInOnePanel {
     function nudgeSelected(dx, dy) {
       const target = selectedElement();
       if (!target) return;
-      const model = parseTransform(target.getAttribute("transform") || "");
-      model.translateX += dx;
-      model.translateY += dy;
-      applyTransform(target, model);
+      const nextMatrix = getCurrentTransformMatrix(target);
+      nextMatrix.translateSelf(dx, dy);
+      applyMatrixTransform(target, nextMatrix);
       markDraftChanged();
     }
     function adjustResolution() {
