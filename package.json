@@ -1,7 +1,7 @@
 {
   "name": "svg-all-in-one",
   "displayName": "SVG All in One",
-  "description": "All-in-one SVG productivity toolkit for VS Code: split edit/preview, optimize, recolor, PNG export, interactive transform, and smart editing.",
+  "description": "All-in-one SVG toolkit for VS Code: split preview editing, optimize/format, PNG export, color tools, diagnostics, and smart completion.",
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
@@ -12,6 +12,17 @@
     "Other",
     "Formatters",
     "Visualization"
+  ],
+  "keywords": [
+    "svg",
+    "svg-editor",
+    "png",
+    "svgo",
+    "xml",
+    "vector",
+    "icon",
+    "diagnostics",
+    "completion"
   ],
   "activationEvents": [
     "onLanguage:svg",
@@ -145,7 +156,8 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm run compile",
+    "package:vsix": "npx @vscode/vsce package --no-dependencies"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",

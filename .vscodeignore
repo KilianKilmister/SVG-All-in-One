@@ -4,3 +4,7 @@
 **/*.map
 src/**
 tsconfig.json
+testFolder/**
+*.vsix
+pnpm-lock.yaml
+.gitignore
