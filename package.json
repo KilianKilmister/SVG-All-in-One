@@ -32,11 +32,19 @@
     "commands": [
       {
         "command": "svgAllInOne.openPanel",
-        "title": "SVG All in One: Open Split Editor + Preview"
+        "title": "SVG All in One: Open Split Editor + Preview",
+        "icon": {
+          "light": "resources/light/open-preview.svg",
+          "dark": "resources/dark/open-preview.svg"
+        }
       },
       {
         "command": "svgAllInOne.exportPng",
-        "title": "SVG All in One: Export PNG"
+        "title": "SVG All in One: Export PNG",
+        "icon": {
+          "light": "resources/light/export-png.svg",
+          "dark": "resources/dark/export-png.svg"
+        }
       },
       {
         "command": "svgAllInOne.exportPngVariants",
