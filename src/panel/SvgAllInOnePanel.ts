@@ -84,6 +84,7 @@ export class SvgAllInOnePanel {
 
   private currentDocument: vscode.TextDocument;
   private syncingFromWebview = false;
+  private pendingWebviewSyncTexts: string[] = [];
   private isDirty = false;
   private draftText: string | undefined;
   private warnedExternalChangeWhileDirty = false;
@@ -126,8 +127,22 @@ export class SvgAllInOnePanel {
         if (this.syncingFromWebview) {
           return;
         }
+
+        const textNow = event.document.getText();
+        const pendingIndex = this.pendingWebviewSyncTexts.findIndex(
+          (pendingText) => pendingText.trim() === textNow.trim()
+        );
+        if (pendingIndex >= 0) {
+          this.pendingWebviewSyncTexts.splice(pendingIndex, 1);
+          this.isDirty = event.document.isDirty;
+          this.draftText = textNow;
+          this.warnedExternalChangeWhileDirty = false;
+          await this.panel.webview.postMessage({ type: "dirtyState", dirty: this.isDirty });
+          return;
+        }
+
         this.isDirty = event.document.isDirty;
-        this.draftText = event.document.getText();
+        this.draftText = textNow;
         this.warnedExternalChangeWhileDirty = false;
         await this.pushDocumentToWebview(true);
       },
@@ -170,6 +185,7 @@ export class SvgAllInOnePanel {
     this.currentDocument = document;
     this.panel.title = `SVG Preview - ${path.basename(document.uri.fsPath || document.uri.path)}`;
     this.attributeSidebar.clearSelection();
+    this.pendingWebviewSyncTexts = [];
     this.isDirty = false;
     this.draftText = undefined;
     this.warnedExternalChangeWhileDirty = false;
@@ -190,10 +206,14 @@ export class SvgAllInOnePanel {
 
       const currentText = this.currentDocument.getText();
       if (cleaned.trim() !== currentText.trim()) {
+        this.pendingWebviewSyncTexts.push(cleaned);
         this.syncingFromWebview = true;
         try {
           const applied = await replaceWholeDocument(this.currentDocument, cleaned);
           if (!applied) {
+            this.pendingWebviewSyncTexts = this.pendingWebviewSyncTexts.filter(
+              (pendingText) => pendingText.trim() !== cleaned.trim()
+            );
             void vscode.window.showErrorMessage("同步 SVG 到编辑器失败。");
             return;
           }
@@ -481,6 +501,7 @@ export class SvgAllInOnePanel {
     }
 
     this.attributeSidebar.clearSelection();
+    this.pendingWebviewSyncTexts = [];
     while (this.disposables.length) {
       const disposable = this.disposables.pop();
       disposable?.dispose();
