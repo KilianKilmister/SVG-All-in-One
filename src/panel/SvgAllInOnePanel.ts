@@ -567,11 +567,6 @@ export class SvgAllInOnePanel {
     .ctx .native-color::-webkit-color-swatch { border: 0; border-radius: 4px; }
     .ctx .native-color::-moz-color-swatch { border: 0; border-radius: 4px; }
     .ctx .apply-color { width: auto; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
-    .mini-map { position: absolute; right: 12px; bottom: 38px; width: 160px; background: color-mix(in srgb, var(--vscode-editor-background) 92%, #0b1220); border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 16%, transparent); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,.3); overflow: hidden; }
-    .mini-map .title { padding: 4px 8px; font-size: 11px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent); }
-    .mini-map .body { height: 104px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--vscode-editor-background) 96%, #0b1220); }
-    .mini-map .body .hint { opacity: 0.7; font-size: 11px; }
-    .mini-map .body svg { width: 100%; height: 100%; object-fit: contain; box-shadow: none; border-radius: 0; margin: 0; }
   </style>
 </head>
 <body>
@@ -592,9 +587,6 @@ export class SvgAllInOnePanel {
         <button id="deleteElement" disabled>Delete</button>
       </div>
       <div class="group">
-        <button id="canvasZoomOut">-</button>
-        <button id="canvasZoomReset">100%</button>
-        <button id="canvasZoomIn">+</button>
         <button id="resolutionButton">Resize</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
         <button id="saveButton" disabled>Save</button>
@@ -605,7 +597,6 @@ export class SvgAllInOnePanel {
     </div>
     <div class="meta"><div id="fileName">-</div><div id="canvasInfo">Zoom 100% | Canvas - | Original -</div><div id="selectionInfo">No selection</div></div>
     <div id="previewHost"></div>
-    <div id="miniMap" class="mini-map"><div class="title">Overview</div><div id="miniMapBody" class="body"><div class="hint">No SVG</div></div></div>
     <div class="status"><span id="dirtyState" class="saved">Saved</span><span>Right click selected element: Edit color / Extract color</span></div>
     <div class="error" id="error"></div>
   </div>
@@ -625,7 +616,6 @@ export class SvgAllInOnePanel {
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const previewHost = document.getElementById("previewHost");
-    const miniMapBody = document.getElementById("miniMapBody");
     const errorNode = document.getElementById("error");
     const fileNameNode = document.getElementById("fileName");
     const canvasInfoNode = document.getElementById("canvasInfo");
@@ -639,9 +629,6 @@ export class SvgAllInOnePanel {
     const scaleDownButton = document.getElementById("scaleDown");
     const scaleUpButton = document.getElementById("scaleUp");
     const deleteButton = document.getElementById("deleteElement");
-    const zoomOutButton = document.getElementById("canvasZoomOut");
-    const zoomResetButton = document.getElementById("canvasZoomReset");
-    const zoomInButton = document.getElementById("canvasZoomIn");
     const resolutionButton = document.getElementById("resolutionButton");
     const contextMenu = document.getElementById("contextMenu");
     const menuEditColor = document.getElementById("menuEditColor");
@@ -784,34 +771,6 @@ export class SvgAllInOnePanel {
       const originalText = formatResolution(state.originalResolution || current);
       const zoomValue = Math.round(state.canvasZoom * 100);
       canvasInfoNode.textContent = "Zoom " + zoomValue + "% | Canvas " + currentText + " | Original " + originalText;
-      zoomResetButton.textContent = zoomValue + "%";
-    }
-    function stripRuntimeAttributesFromTree(root) {
-      if (!root) {
-        return;
-      }
-      const clearAttrs = (element) => {
-        element.removeAttribute("data-aii-id");
-        element.removeAttribute("data-aii-path");
-        element.removeAttribute("data-aii-selected");
-      };
-      clearAttrs(root);
-      for (const element of root.querySelectorAll("[data-aii-id], [data-aii-path], [data-aii-selected]")) {
-        clearAttrs(element);
-      }
-    }
-    function refreshMiniMap() {
-      miniMapBody.innerHTML = "";
-      if (!state.svgRoot) {
-        const hint = document.createElement("div");
-        hint.className = "hint";
-        hint.textContent = "No SVG";
-        miniMapBody.appendChild(hint);
-        return;
-      }
-      const clone = state.svgRoot.cloneNode(true);
-      stripRuntimeAttributesFromTree(clone);
-      miniMapBody.appendChild(clone);
     }
     function clamp(value, min, max) {
       return Math.min(max, Math.max(min, value));
@@ -1144,7 +1103,6 @@ export class SvgAllInOnePanel {
       }
       setDirty(isDraftDirty(next));
       updateCanvasInfo();
-      refreshMiniMap();
       postSelectionState();
       vscode.postMessage({ type: "draftChanged", text: next });
     }
@@ -1451,7 +1409,6 @@ export class SvgAllInOnePanel {
         previewHost.innerHTML = "";
         clearSelection();
         updateCanvasInfo();
-        refreshMiniMap();
         setError("");
         return;
       }
@@ -1500,7 +1457,6 @@ export class SvgAllInOnePanel {
         }
         applyCanvasZoom();
         updateCanvasInfo();
-        refreshMiniMap();
       } catch (error) {
         state.svgRoot = undefined;
         state.canvasStage = undefined;
@@ -1525,10 +1481,15 @@ export class SvgAllInOnePanel {
     scaleDownButton.addEventListener("click", () => scaleSelected(-SCALE_STEP));
     scaleUpButton.addEventListener("click", () => scaleSelected(SCALE_STEP));
     deleteButton.addEventListener("click", deleteSelected);
-    zoomOutButton.addEventListener("click", () => setCanvasZoom(state.canvasZoom - ZOOM_STEP));
-    zoomResetButton.addEventListener("click", () => setCanvasZoom(1));
-    zoomInButton.addEventListener("click", () => setCanvasZoom(state.canvasZoom + ZOOM_STEP));
     resolutionButton.addEventListener("click", adjustResolution);
+    previewHost.addEventListener("wheel", (event) => {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+      event.preventDefault();
+      const delta = event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      setCanvasZoom(state.canvasZoom + delta);
+    }, { passive: false });
     menuEditColor.addEventListener("click", (event) => {
       event.stopPropagation();
       editSelectedColor();
@@ -1657,7 +1618,6 @@ export class SvgAllInOnePanel {
     updateHistoryButtons();
     updateSelectionState();
     updateCanvasInfo();
-    refreshMiniMap();
     vscode.postMessage({ type: "ready" });
   </script>
 </body>
