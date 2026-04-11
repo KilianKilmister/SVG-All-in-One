@@ -369,14 +369,14 @@ export class SvgAllInOnePanel {
       disposable?.dispose();
     }
   }
-
   private async pushDocumentToWebview(): Promise<void> {
+    const dirty = this.isDirty || this.currentDocument.isDirty;
     await this.panel.webview.postMessage({
       type: "document",
       fileName: path.basename(this.currentDocument.uri.fsPath || this.currentDocument.uri.path),
       text: this.currentDocument.getText()
     });
-    await this.panel.webview.postMessage({ type: "dirtyState", dirty: this.isDirty });
+    await this.panel.webview.postMessage({ type: "dirtyState", dirty });
   }
 
   private getWebviewHtml(webview: vscode.Webview): string {
@@ -395,6 +395,7 @@ export class SvgAllInOnePanel {
     .root { height: 100%; display: flex; flex-direction: column; }
     .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); }
     .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .toolbar-divider { width: 1px; height: 18px; background: color-mix(in srgb, var(--vscode-editor-foreground) 22%, transparent); display: inline-block; margin: 0 2px; }
     button { border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); background: color-mix(in srgb, var(--vscode-editor-background) 86%, #0b1220); color: inherit; border-radius: 7px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .meta, .status { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; color: color-mix(in srgb, var(--vscode-editor-foreground) 50%, var(--vscode-editor-background)); border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 12%, transparent); }
@@ -431,14 +432,17 @@ export class SvgAllInOnePanel {
         <button data-op="format">格式化</button>
         <button data-op="cleanup">清理字符</button>
         <button data-op="compress">压缩</button>
-        <button data-op="exportPng">导出 PNG</button>
-        <button data-op="exportPngVariants">导出多倍率</button>
         <button data-op="insertSnippet">插入片段</button>
         <button id="rotateLeft" disabled>左转 15°</button>
         <button id="rotateRight" disabled>右转 15°</button>
         <button id="deleteElement" disabled>删除元素</button>
       </div>
-      <div class="group"><button id="saveButton" disabled>保存</button></div>
+      <div class="group">
+        <button id="saveButton" disabled>保存</button>
+        <span class="toolbar-divider" aria-hidden="true"></span>
+        <button data-op="exportPng">导出 PNG</button>
+        <button data-op="exportPngVariants">导出多倍率</button>
+      </div>
     </div>
     <div class="meta"><div id="fileName">-</div><div id="selectionInfo">未选中元素</div></div>
     <div id="previewHost"></div>
