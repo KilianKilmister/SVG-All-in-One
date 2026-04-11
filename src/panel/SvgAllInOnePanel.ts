@@ -30,6 +30,7 @@ interface PanelMessage {
   height?: number;
   currentWidth?: number;
   currentHeight?: number;
+  preserveHistory?: boolean;
 }
 
 export class SvgAllInOnePanel {
@@ -128,7 +129,7 @@ export class SvgAllInOnePanel {
         this.isDirty = event.document.isDirty;
         this.draftText = event.document.getText();
         this.warnedExternalChangeWhileDirty = false;
-        await this.pushDocumentToWebview();
+        await this.pushDocumentToWebview(true);
       },
       undefined,
       this.disposables
@@ -248,7 +249,7 @@ export class SvgAllInOnePanel {
     if (message.type === "requestOperation" && message.operation) {
       await this.saveDraft(false);
       await this.executePanelOperation(message.operation);
-      await this.pushDocumentToWebview();
+      await this.pushDocumentToWebview(true);
     }
   }
 
@@ -485,12 +486,13 @@ export class SvgAllInOnePanel {
       disposable?.dispose();
     }
   }
-  private async pushDocumentToWebview(): Promise<void> {
+  private async pushDocumentToWebview(preserveHistory = false): Promise<void> {
     const dirty = this.isDirty || this.currentDocument.isDirty;
     await this.panel.webview.postMessage({
       type: "document",
       fileName: path.basename(this.currentDocument.uri.fsPath || this.currentDocument.uri.path),
-      text: this.currentDocument.getText()
+      text: this.currentDocument.getText(),
+      preserveHistory
     });
     await this.panel.webview.postMessage({ type: "dirtyState", dirty });
   }
@@ -1490,17 +1492,29 @@ export class SvgAllInOnePanel {
     window.addEventListener("message", (event) => {
       const message = event.data || {};
       if (message.type === "document") {
+        const preserveHistory = Boolean(message.preserveHistory);
+        const previousSelected = selectedElement();
+        const selectedPath = previousSelected ? readNodePath(previousSelected) : [];
         fileNameNode.textContent = message.fileName || "-";
         state.baseSvgText = message.text || "";
         state.rawSvgText = state.baseSvgText;
         state.xmlDeclaration = parseXmlHeader(state.rawSvgText);
-        state.canvasZoom = 1;
         hideContextMenu();
-        renderSvg(state.rawSvgText);
-        state.originalResolution = readResolutionFromRoot(state.svgRoot);
-        updateCanvasInfo();
-        resetHistory(state.rawSvgText);
-        setDirty(false);
+        if (!preserveHistory) {
+          state.canvasZoom = 1;
+          renderSvg(state.rawSvgText);
+          state.originalResolution = readResolutionFromRoot(state.svgRoot);
+          updateCanvasInfo();
+          resetHistory(state.rawSvgText);
+          setDirty(false);
+        } else {
+          renderSvg(state.rawSvgText, { selectedPath });
+          if (state.history[state.historyIndex] !== state.rawSvgText) {
+            pushHistory(state.rawSvgText);
+          } else {
+            updateHistoryButtons();
+          }
+        }
       } else if (message.type === "dirtyState") {
         setDirty(Boolean(message.dirty) || isDraftDirty(state.rawSvgText));
       } else if (message.type === "saved") {
