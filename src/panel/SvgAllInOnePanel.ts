@@ -24,6 +24,12 @@ interface PanelMessage {
   nodePath?: SvgNodePath;
   tagName?: string;
   attributes?: Record<string, string>;
+  resizeMode?: "proportional" | "free";
+  ratio?: number;
+  width?: number;
+  height?: number;
+  currentWidth?: number;
+  currentHeight?: number;
 }
 
 export class SvgAllInOnePanel {
@@ -196,6 +202,11 @@ export class SvgAllInOnePanel {
       return;
     }
 
+    if (message.type === "requestCanvasResize") {
+      await this.requestCanvasResizeFromUser(message.currentWidth, message.currentHeight);
+      return;
+    }
+
     if (message.type === "copyToClipboard" && typeof message.text === "string") {
       await vscode.env.clipboard.writeText(message.text);
       void vscode.window.showInformationMessage(`已复制颜色：${message.text}`);
@@ -227,6 +238,97 @@ export class SvgAllInOnePanel {
       await this.executePanelOperation(message.operation);
       await this.pushDocumentToWebview();
     }
+  }
+
+  private async requestCanvasResizeFromUser(
+    currentWidth?: number,
+    currentHeight?: number
+  ): Promise<void> {
+    const modePick = await vscode.window.showQuickPick(
+      [
+        {
+          label: "按比例调整",
+          description: "输入缩放比例（例如 1.5）",
+          mode: "proportional" as const
+        },
+        {
+          label: "自由调整",
+          description: "分别输入宽度和高度",
+          mode: "free" as const
+        }
+      ],
+      {
+        title: "调整 SVG 画布分辨率",
+        placeHolder: "请选择调整方式"
+      }
+    );
+
+    if (!modePick) {
+      return;
+    }
+
+    if (modePick.mode === "proportional") {
+      const ratioInput = await vscode.window.showInputBox({
+        title: "按比例调整画布",
+        prompt: "输入缩放比例（> 0）",
+        value: "1",
+        validateInput: (value) => {
+          const ratio = Number(value.trim());
+          return Number.isFinite(ratio) && ratio > 0 ? undefined : "请输入大于 0 的数字";
+        }
+      });
+
+      if (!ratioInput) {
+        return;
+      }
+
+      const ratio = Number(ratioInput.trim());
+      await this.panel.webview.postMessage({
+        type: "applyCanvasResize",
+        resizeMode: "proportional",
+        ratio
+      });
+      return;
+    }
+
+    const widthInput = await vscode.window.showInputBox({
+      title: "设置画布宽度",
+      prompt: "输入像素宽度（> 0）",
+      value:
+        typeof currentWidth === "number" && Number.isFinite(currentWidth)
+          ? String(Math.max(1, Math.round(currentWidth)))
+          : "512",
+      validateInput: (value) => {
+        const width = Number(value.trim());
+        return Number.isFinite(width) && width > 0 ? undefined : "请输入大于 0 的数字";
+      }
+    });
+    if (!widthInput) {
+      return;
+    }
+
+    const heightInput = await vscode.window.showInputBox({
+      title: "设置画布高度",
+      prompt: "输入像素高度（> 0）",
+      value:
+        typeof currentHeight === "number" && Number.isFinite(currentHeight)
+          ? String(Math.max(1, Math.round(currentHeight)))
+          : "512",
+      validateInput: (value) => {
+        const height = Number(value.trim());
+        return Number.isFinite(height) && height > 0 ? undefined : "请输入大于 0 的数字";
+      }
+    });
+    if (!heightInput) {
+      return;
+    }
+
+    await this.panel.webview.postMessage({
+      type: "applyCanvasResize",
+      resizeMode: "free",
+      width: Number(widthInput.trim()),
+      height: Number(heightInput.trim())
+    });
   }
 
   private async executePanelOperation(operation: PanelOperation): Promise<void> {
@@ -1049,42 +1151,42 @@ export class SvgAllInOnePanel {
         setError("Cannot detect current canvas resolution.");
         return;
       }
-      const modeInput = window.prompt("Resize mode: p=proportional, f=free", "p");
-      if (modeInput === null) {
+      vscode.postMessage({
+        type: "requestCanvasResize",
+        currentWidth: current.width,
+        currentHeight: current.height
+      });
+    }
+    function applyCanvasResize(payload) {
+      if (!state.svgRoot) {
+        return;
+      }
+      const current = readResolutionFromRoot(state.svgRoot);
+      if (!current) {
+        setError("Cannot detect current canvas resolution.");
         return;
       }
       let nextWidth = current.width;
       let nextHeight = current.height;
-      const mode = modeInput.trim().toLowerCase();
-      if (mode.startsWith("p")) {
-        const ratioInput = window.prompt("Scale ratio (example: 1.5)", "1");
-        if (ratioInput === null) {
-          return;
-        }
-        const ratio = Number(ratioInput.trim());
+      if (payload.resizeMode === "proportional") {
+        const ratio = Number(payload.ratio);
         if (!Number.isFinite(ratio) || ratio <= 0) {
           setError("Invalid ratio.");
           return;
         }
         nextWidth = current.width * ratio;
         nextHeight = current.height * ratio;
-      } else {
-        const widthInput = window.prompt("Canvas width (px)", String(Math.round(current.width)));
-        if (widthInput === null) {
-          return;
-        }
-        const heightInput = window.prompt("Canvas height (px)", String(Math.round(current.height)));
-        if (heightInput === null) {
-          return;
-        }
-        const width = Number(widthInput.trim());
-        const height = Number(heightInput.trim());
+      } else if (payload.resizeMode === "free") {
+        const width = Number(payload.width);
+        const height = Number(payload.height);
         if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
           setError("Width and height must be positive numbers.");
           return;
         }
         nextWidth = width;
         nextHeight = height;
+      } else {
+        return;
       }
       setError("");
       state.svgRoot.setAttribute("width", String(Math.max(1, Math.round(nextWidth))));
@@ -1403,6 +1505,8 @@ export class SvgAllInOnePanel {
           updateHistoryButtons();
         }
         setDirty(false);
+      } else if (message.type === "applyCanvasResize") {
+        applyCanvasResize(message);
       }
     });
 
