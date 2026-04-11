@@ -125,17 +125,9 @@ export class SvgAllInOnePanel {
         if (this.syncingFromWebview) {
           return;
         }
-
-        if (this.isDirty) {
-          if (!this.warnedExternalChangeWhileDirty) {
-            this.warnedExternalChangeWhileDirty = true;
-            void vscode.window.showWarningMessage(
-              "SVG 文件已外部变更，预览草稿尚未保存。请先保存或重新打开预览。"
-            );
-          }
-          return;
-        }
-
+        this.isDirty = event.document.isDirty;
+        this.draftText = event.document.getText();
+        this.warnedExternalChangeWhileDirty = false;
         await this.pushDocumentToWebview();
       },
       undefined,
@@ -190,9 +182,29 @@ export class SvgAllInOnePanel {
     }
 
     if (message.type === "draftChanged" && typeof message.text === "string") {
+      const cleaned = this.stripPreviewRuntimeAttributes(message.text);
+      if (!cleaned.trim()) {
+        return;
+      }
+
       const currentText = this.currentDocument.getText();
-      this.isDirty = message.text.trim() !== currentText.trim();
-      this.draftText = message.text;
+      if (cleaned.trim() !== currentText.trim()) {
+        this.syncingFromWebview = true;
+        try {
+          const applied = await replaceWholeDocument(this.currentDocument, cleaned);
+          if (!applied) {
+            void vscode.window.showErrorMessage("同步 SVG 到编辑器失败。");
+            return;
+          }
+        } finally {
+          this.syncingFromWebview = false;
+        }
+      }
+
+      this.draftText = cleaned;
+      this.isDirty = this.currentDocument.isDirty;
+      this.warnedExternalChangeWhileDirty = false;
+      this.attributeSidebar.tryRefreshSelectionFromDocument(this.currentDocument);
       await this.panel.webview.postMessage({ type: "dirtyState", dirty: this.isDirty });
       return;
     }
@@ -622,7 +634,7 @@ export class SvgAllInOnePanel {
     const MIN_ZOOM = 0.1;
     const MAX_ZOOM = 8;
     const ZOOM_STEP = 0.1;
-    const SCALE_FACTOR = 1.1;
+    const SCALE_STEP = 0.1;
     const TRANSFORM_EPSILON = 1e-4;
 
     const state = {
@@ -828,14 +840,8 @@ export class SvgAllInOnePanel {
       if (!Number.isFinite(angle)) {
         return 0;
       }
-      let normalized = angle % 360;
-      if (normalized > 180) {
-        normalized -= 360;
-      }
-      if (normalized < -180) {
-        normalized += 360;
-      }
-      return Math.abs(normalized) < TRANSFORM_EPSILON ? 0 : normalized;
+      const remainder = angle % 360;
+      return Math.abs(remainder) < TRANSFORM_EPSILON ? 0 : angle;
     }
     function formatNumber(value, digits = 4) {
       if (!Number.isFinite(value)) {
@@ -1111,18 +1117,24 @@ export class SvgAllInOnePanel {
       applyTransform(target, model);
       markDraftChanged();
     }
-    function scaleSelected(factor) {
+    function scaleSelected(deltaScale) {
       const target = selectedElement();
-      if (!target || factor <= 0) return;
+      if (!target || !Number.isFinite(deltaScale) || deltaScale === 0) return;
       let bbox;
       try { bbox = target.getBBox(); } catch (_) { return; }
       const cx = bbox.x + bbox.width / 2;
       const cy = bbox.y + bbox.height / 2;
       const model = parseTransform(target.getAttribute("transform") || "");
-      model.translateX += cx * (1 - factor);
-      model.translateY += cy * (1 - factor);
-      model.scaleX *= factor;
-      model.scaleY *= factor;
+      const oldScaleX = Math.abs(model.scaleX) < TRANSFORM_EPSILON ? 1 : model.scaleX;
+      const oldScaleY = Math.abs(model.scaleY) < TRANSFORM_EPSILON ? 1 : model.scaleY;
+      const nextScaleX = Math.max(0.05, oldScaleX + deltaScale);
+      const nextScaleY = Math.max(0.05, oldScaleY + deltaScale);
+      const ratioX = nextScaleX / oldScaleX;
+      const ratioY = nextScaleY / oldScaleY;
+      model.translateX += cx * (1 - ratioX);
+      model.translateY += cy * (1 - ratioY);
+      model.scaleX = nextScaleX;
+      model.scaleY = nextScaleY;
       applyTransform(target, model);
       markDraftChanged();
     }
@@ -1391,8 +1403,8 @@ export class SvgAllInOnePanel {
     redoButton.addEventListener("click", redoHistory);
     rotateLeftButton.addEventListener("click", () => rotateSelected(-15));
     rotateRightButton.addEventListener("click", () => rotateSelected(15));
-    scaleDownButton.addEventListener("click", () => scaleSelected(1 / SCALE_FACTOR));
-    scaleUpButton.addEventListener("click", () => scaleSelected(SCALE_FACTOR));
+    scaleDownButton.addEventListener("click", () => scaleSelected(-SCALE_STEP));
+    scaleUpButton.addEventListener("click", () => scaleSelected(SCALE_STEP));
     deleteButton.addEventListener("click", deleteSelected);
     zoomOutButton.addEventListener("click", () => setCanvasZoom(state.canvasZoom - ZOOM_STEP));
     zoomResetButton.addEventListener("click", () => setCanvasZoom(1));
