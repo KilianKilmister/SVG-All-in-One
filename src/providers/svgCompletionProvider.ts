@@ -71,10 +71,33 @@ const ATTRIBUTE_VALUE_SUGGESTIONS: Record<string, string[]> = {
   transform: ["translate(10 10)", "scale(1.2)", "rotate(15)", "skewX(10)"]
 };
 
+const LETTER_TRIGGER_CHARS = Array.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:-");
+const BASE_TRIGGER_CHARS = ["<", " ", "\"", "'", "/", "="];
+
 function inTagContext(linePrefix: string): boolean {
   const lastOpen = linePrefix.lastIndexOf("<");
   const lastClose = linePrefix.lastIndexOf(">");
   return lastOpen > lastClose;
+}
+
+function isSvgLikeDocument(document: vscode.TextDocument): boolean {
+  if (document.languageId === "svg") {
+    return true;
+  }
+
+  const lowerPath = document.uri.path.toLowerCase();
+  if (lowerPath.endsWith(".svg")) {
+    return true;
+  }
+
+  if (document.languageId === "xml") {
+    const preview = document.getText(
+      new vscode.Range(0, 0, Math.min(document.lineCount - 1, 20), 200)
+    );
+    return /<svg[\s>]/i.test(preview);
+  }
+
+  return false;
 }
 
 function buildElementCompletions(): vscode.CompletionItem[] {
@@ -101,6 +124,10 @@ class SvgCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position
   ): vscode.ProviderResult<vscode.CompletionItem[]> {
+    if (!isSvgLikeDocument(document)) {
+      return [];
+    }
+
     const linePrefix = document.lineAt(position).text.slice(0, position.character);
     const completions: vscode.CompletionItem[] = [];
 
@@ -135,13 +162,11 @@ class SvgCompletionProvider implements vscode.CompletionItemProvider {
 export function registerSvgCompletionProvider(): vscode.Disposable {
   return vscode.languages.registerCompletionItemProvider(
     [
-      { language: "svg", scheme: "file" },
-      { language: "svg", scheme: "untitled" }
+      { language: "svg" },
+      { language: "xml" }
     ],
     new SvgCompletionProvider(),
-    "<",
-    " ",
-    "\"",
-    "'"
+    ...BASE_TRIGGER_CHARS,
+    ...LETTER_TRIGGER_CHARS
   );
 }
