@@ -1,4 +1,4 @@
-import * as path from "path";
+﻿import * as path from "path";
 import * as vscode from "vscode";
 import {
   runExportPng,
@@ -184,9 +184,10 @@ export class SvgAllInOnePanel {
     }
 
     if (message.type === "draftChanged" && typeof message.text === "string") {
-      this.isDirty = true;
+      const currentText = this.currentDocument.getText();
+      this.isDirty = message.text.trim() !== currentText.trim();
       this.draftText = message.text;
-      await this.panel.webview.postMessage({ type: "dirtyState", dirty: true });
+      await this.panel.webview.postMessage({ type: "dirtyState", dirty: this.isDirty });
       return;
     }
 
@@ -266,6 +267,12 @@ export class SvgAllInOnePanel {
 
     if (!this.isDirty || !this.draftText) {
       const persisted = await persistCurrentDocument();
+      if (persisted) {
+        await this.panel.webview.postMessage({
+          type: "dirtyState",
+          dirty: this.currentDocument.isDirty || this.isDirty
+        });
+      }
       if (persisted && showSavedMessage) {
         void vscode.window.showInformationMessage("预览修改已保存。");
       }
@@ -387,17 +394,22 @@ export class SvgAllInOnePanel {
   <style>
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: "Segoe UI", "PingFang SC", sans-serif; }
-    .root { height: 100%; display: flex; flex-direction: column; }
+    .root { position: relative; height: 100%; display: flex; flex-direction: column; }
     .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); }
     .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .toolbar-divider { width: 1px; height: 18px; background: color-mix(in srgb, var(--vscode-editor-foreground) 22%, transparent); display: inline-block; margin: 0 2px; }
     button { border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 15%, transparent); background: color-mix(in srgb, var(--vscode-editor-background) 86%, #0b1220); color: inherit; border-radius: 7px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .meta, .status { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; color: color-mix(in srgb, var(--vscode-editor-foreground) 50%, var(--vscode-editor-background)); border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 12%, transparent); }
+    .meta { align-items: center; }
+    #fileName { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+    #canvasInfo { margin-left: auto; white-space: nowrap; }
+    #selectionInfo { white-space: nowrap; }
     .status { border-top: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 12%, transparent); border-bottom: 0; }
     .dirty { color: #f59e0b; font-weight: 600; }
     .saved { color: #22c55e; font-weight: 600; }
     #previewHost { position: relative; flex: 1; overflow: auto; padding: 12px; background-image: linear-gradient(45deg, rgba(127,127,127,.1) 25%, transparent 25%), linear-gradient(-45deg, rgba(127,127,127,.1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(127,127,127,.1) 75%), linear-gradient(-45deg, transparent 75%, rgba(127,127,127,.1) 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0; }
+    #previewHost .canvas-stage { transform-origin: top left; width: max-content; margin: 0 auto; }
     #previewHost svg { display: block; margin: 0 auto; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,.25); }
     #previewHost [data-aii-id] { cursor: pointer; }
     #previewHost [data-aii-id][data-aii-selected="1"] { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px #0ea5e9); cursor: grab; }
@@ -418,29 +430,46 @@ export class SvgAllInOnePanel {
     .ctx .native-color::-webkit-color-swatch { border: 0; border-radius: 4px; }
     .ctx .native-color::-moz-color-swatch { border: 0; border-radius: 4px; }
     .ctx .apply-color { width: auto; border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
+    .mini-map { position: absolute; right: 12px; bottom: 38px; width: 160px; background: color-mix(in srgb, var(--vscode-editor-background) 92%, #0b1220); border: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 16%, transparent); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,.3); overflow: hidden; }
+    .mini-map .title { padding: 4px 8px; font-size: 11px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent); }
+    .mini-map .body { height: 104px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--vscode-editor-background) 96%, #0b1220); }
+    .mini-map .body .hint { opacity: 0.7; font-size: 11px; }
+    .mini-map .body svg { width: 100%; height: 100%; object-fit: contain; box-shadow: none; border-radius: 0; margin: 0; }
   </style>
 </head>
 <body>
   <div class="root">
     <div class="toolbar">
       <div class="group">
-        <button data-op="format">格式化</button>
-        <button data-op="cleanup">清理字符</button>
-        <button data-op="compress">压缩</button>
-        <button id="rotateLeft" disabled>左转 15°</button>
-        <button id="rotateRight" disabled>右转 15°</button>
-        <button id="deleteElement" disabled>删除元素</button>
+        <button data-op="format">Format</button>
+        <button data-op="cleanup">Cleanup</button>
+        <button data-op="compress">Compress</button>
+        <span class="toolbar-divider" aria-hidden="true"></span>
+        <button id="undoButton" disabled>Undo</button>
+        <button id="redoButton" disabled>Redo</button>
+        <span class="toolbar-divider" aria-hidden="true"></span>
+        <button id="rotateLeft" disabled>Rotate Left 15°</button>
+        <button id="rotateRight" disabled>Rotate Right 15°</button>
+        <button id="scaleDown" disabled>Scale -10%</button>
+        <button id="scaleUp" disabled>Scale +10%</button>
+        <button id="deleteElement" disabled>Delete</button>
       </div>
       <div class="group">
-        <button id="saveButton" disabled>保存</button>
+        <button id="canvasZoomOut">-</button>
+        <button id="canvasZoomReset">100%</button>
+        <button id="canvasZoomIn">+</button>
+        <button id="resolutionButton">Resize</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button data-op="exportPng">导出 PNG</button>
-        <button data-op="exportPngVariants">导出多倍率</button>
+        <button id="saveButton" disabled>Save</button>
+        <span class="toolbar-divider" aria-hidden="true"></span>
+        <button data-op="exportPng">Export PNG</button>
+        <button data-op="exportPngVariants">Export Variants</button>
       </div>
     </div>
-    <div class="meta"><div id="fileName">-</div><div id="selectionInfo">未选中元素</div></div>
+    <div class="meta"><div id="fileName">-</div><div id="canvasInfo">Zoom 100% | Canvas - | Original -</div><div id="selectionInfo">No selection</div></div>
     <div id="previewHost"></div>
-    <div class="status"><span id="dirtyState" class="saved">已保存</span><span>右键已选元素：修改颜色 / 提取颜色</span></div>
+    <div id="miniMap" class="mini-map"><div class="title">Overview</div><div id="miniMapBody" class="body"><div class="hint">No SVG</div></div></div>
+    <div class="status"><span id="dirtyState" class="saved">Saved</span><span>Right click selected element: Edit color / Extract color</span></div>
     <div class="error" id="error"></div>
   </div>
   <div class="ctx" id="contextMenu">
@@ -459,14 +488,24 @@ export class SvgAllInOnePanel {
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const previewHost = document.getElementById("previewHost");
+    const miniMapBody = document.getElementById("miniMapBody");
     const errorNode = document.getElementById("error");
     const fileNameNode = document.getElementById("fileName");
+    const canvasInfoNode = document.getElementById("canvasInfo");
     const selectionInfoNode = document.getElementById("selectionInfo");
     const saveButton = document.getElementById("saveButton");
     const dirtyStateNode = document.getElementById("dirtyState");
+    const undoButton = document.getElementById("undoButton");
+    const redoButton = document.getElementById("redoButton");
     const rotateLeftButton = document.getElementById("rotateLeft");
     const rotateRightButton = document.getElementById("rotateRight");
+    const scaleDownButton = document.getElementById("scaleDown");
+    const scaleUpButton = document.getElementById("scaleUp");
     const deleteButton = document.getElementById("deleteElement");
+    const zoomOutButton = document.getElementById("canvasZoomOut");
+    const zoomResetButton = document.getElementById("canvasZoomReset");
+    const zoomInButton = document.getElementById("canvasZoomIn");
+    const resolutionButton = document.getElementById("resolutionButton");
     const contextMenu = document.getElementById("contextMenu");
     const menuEditColor = document.getElementById("menuEditColor");
     const menuExtractColor = document.getElementById("menuExtractColor");
@@ -477,21 +516,70 @@ export class SvgAllInOnePanel {
     const menuApplyColor = document.getElementById("menuApplyColor");
     const COLOR_ATTRS = ["fill", "stroke", "stop-color", "flood-color", "lighting-color", "color"];
     const DEFAULT_MENU_COLORS = ["#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#3b82f6", "#f97316", "#111827", "#4b5563", "#9ca3af", "#ffffff"];
+    const MAX_HISTORY = 200;
+    const MIN_ZOOM = 0.1;
+    const MAX_ZOOM = 8;
+    const ZOOM_STEP = 0.1;
+    const SCALE_FACTOR = 1.1;
+    const TRANSFORM_EPSILON = 1e-4;
 
     const state = {
       rawSvgText: "",
+      baseSvgText: "",
       svgRoot: undefined,
       selectedId: undefined,
       xmlDeclaration: "",
       drag: undefined,
-      dragging: false
+      dragging: false,
+      history: [],
+      historyIndex: -1,
+      canvasStage: undefined,
+      canvasZoom: 1,
+      originalResolution: undefined
     };
 
-    function setError(message) { errorNode.textContent = message || ""; }
+    function setError(message) {
+      errorNode.textContent = message || "";
+    }
+    function isDraftDirty(text) {
+      return (text || "").trim() !== (state.baseSvgText || "").trim();
+    }
     function setDirty(dirty) {
-      saveButton.disabled = !dirty;
-      dirtyStateNode.textContent = dirty ? "未保存" : "已保存";
-      dirtyStateNode.className = dirty ? "dirty" : "saved";
+      const nextDirty = Boolean(dirty);
+      saveButton.disabled = !nextDirty;
+      dirtyStateNode.textContent = nextDirty ? "Unsaved" : "Saved";
+      dirtyStateNode.className = nextDirty ? "dirty" : "saved";
+    }
+    function updateHistoryButtons() {
+      undoButton.disabled = state.historyIndex <= 0;
+      redoButton.disabled = state.historyIndex < 0 || state.historyIndex >= state.history.length - 1;
+    }
+    function resetHistory(text) {
+      state.history = [text];
+      state.historyIndex = 0;
+      updateHistoryButtons();
+    }
+    function pushHistory(text) {
+      if (!text) {
+        updateHistoryButtons();
+        return;
+      }
+      const current = state.history[state.historyIndex];
+      if (current === text) {
+        updateHistoryButtons();
+        return;
+      }
+      if (state.historyIndex < state.history.length - 1) {
+        state.history = state.history.slice(0, state.historyIndex + 1);
+      }
+      state.history.push(text);
+      if (state.history.length > MAX_HISTORY) {
+        const overflow = state.history.length - MAX_HISTORY;
+        state.history.splice(0, overflow);
+        state.historyIndex = Math.max(0, state.historyIndex - overflow);
+      }
+      state.historyIndex = state.history.length - 1;
+      updateHistoryButtons();
     }
     function hideColorEditor() {
       menuColorEditor.classList.remove("visible");
@@ -518,8 +606,209 @@ export class SvgAllInOnePanel {
       const parseError = doc.querySelector("parsererror");
       if (parseError) throw new Error(parseError.textContent || "SVG parse error");
       const root = doc.documentElement;
-      if (!root || root.tagName.toLowerCase() !== "svg") throw new Error("当前内容不是有效 SVG");
+      if (!root || root.tagName.toLowerCase() !== "svg") throw new Error("Current content is not valid SVG.");
       return root;
+    }
+    function parseLength(value) {
+      if (!value) {
+        return undefined;
+      }
+      const numeric = Number.parseFloat(value);
+      return Number.isFinite(numeric) ? numeric : undefined;
+    }
+    function readResolutionFromRoot(root) {
+      if (!root) {
+        return undefined;
+      }
+      const width = parseLength(root.getAttribute("width"));
+      const height = parseLength(root.getAttribute("height"));
+      if (width && height && width > 0 && height > 0) {
+        return { width, height };
+      }
+      const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map((value) => Number(value));
+      if (viewBox.length === 4 && viewBox.every((value) => Number.isFinite(value))) {
+        const vbWidth = Math.abs(viewBox[2]);
+        const vbHeight = Math.abs(viewBox[3]);
+        if (vbWidth > 0 && vbHeight > 0) {
+          return { width: vbWidth, height: vbHeight };
+        }
+      }
+      return undefined;
+    }
+    function formatResolution(resolution) {
+      if (!resolution) {
+        return "-";
+      }
+      return Math.round(resolution.width) + " x " + Math.round(resolution.height);
+    }
+    function updateCanvasInfo() {
+      const current = readResolutionFromRoot(state.svgRoot);
+      const currentText = formatResolution(current);
+      const originalText = formatResolution(state.originalResolution || current);
+      const zoomValue = Math.round(state.canvasZoom * 100);
+      canvasInfoNode.textContent = "Zoom " + zoomValue + "% | Canvas " + currentText + " | Original " + originalText;
+      zoomResetButton.textContent = zoomValue + "%";
+    }
+    function stripRuntimeAttributesFromTree(root) {
+      if (!root) {
+        return;
+      }
+      const clearAttrs = (element) => {
+        element.removeAttribute("data-aii-id");
+        element.removeAttribute("data-aii-path");
+        element.removeAttribute("data-aii-selected");
+      };
+      clearAttrs(root);
+      for (const element of root.querySelectorAll("[data-aii-id], [data-aii-path], [data-aii-selected]")) {
+        clearAttrs(element);
+      }
+    }
+    function refreshMiniMap() {
+      miniMapBody.innerHTML = "";
+      if (!state.svgRoot) {
+        const hint = document.createElement("div");
+        hint.className = "hint";
+        hint.textContent = "No SVG";
+        miniMapBody.appendChild(hint);
+        return;
+      }
+      const clone = state.svgRoot.cloneNode(true);
+      stripRuntimeAttributesFromTree(clone);
+      miniMapBody.appendChild(clone);
+    }
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+    function applyCanvasZoom() {
+      if (state.canvasStage) {
+        state.canvasStage.style.transform = "scale(" + Number(state.canvasZoom.toFixed(2)) + ")";
+      }
+      updateCanvasInfo();
+    }
+    function setCanvasZoom(value) {
+      state.canvasZoom = clamp(value, MIN_ZOOM, MAX_ZOOM);
+      applyCanvasZoom();
+    }
+    function createTransformModel() {
+      return {
+        translateX: 0,
+        translateY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        rotateAngle: 0,
+        rotateCx: 0,
+        rotateCy: 0,
+        hasRotateCenter: false,
+        others: []
+      };
+    }
+    function cloneTransformModel(model) {
+      return {
+        translateX: model.translateX,
+        translateY: model.translateY,
+        scaleX: model.scaleX,
+        scaleY: model.scaleY,
+        rotateAngle: model.rotateAngle,
+        rotateCx: model.rotateCx,
+        rotateCy: model.rotateCy,
+        hasRotateCenter: model.hasRotateCenter,
+        others: model.others.slice()
+      };
+    }
+    function parseTransformNumbers(raw) {
+      return raw
+        .trim()
+        .split(/[\s,]+/)
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value));
+    }
+    function normalizeAngle(angle) {
+      if (!Number.isFinite(angle)) {
+        return 0;
+      }
+      let normalized = angle % 360;
+      if (normalized > 180) {
+        normalized -= 360;
+      }
+      if (normalized < -180) {
+        normalized += 360;
+      }
+      return Math.abs(normalized) < TRANSFORM_EPSILON ? 0 : normalized;
+    }
+    function formatNumber(value, digits = 4) {
+      if (!Number.isFinite(value)) {
+        return "0";
+      }
+      const normalized = Math.abs(value) < TRANSFORM_EPSILON ? 0 : value;
+      return String(Number(normalized.toFixed(digits)));
+    }
+    function parseTransform(raw) {
+      const model = createTransformModel();
+      if (!raw) {
+        return model;
+      }
+      const expression = /([a-zA-Z]+)\(([^)]*)\)/g;
+      let match;
+      while ((match = expression.exec(raw)) !== null) {
+        const name = match[1].toLowerCase();
+        const args = parseTransformNumbers(match[2]);
+        if (name === "translate") {
+          const x = args.length > 0 ? args[0] : 0;
+          const y = args.length > 1 ? args[1] : 0;
+          model.translateX += x;
+          model.translateY += y;
+          continue;
+        }
+        if (name === "scale") {
+          const x = args.length > 0 ? args[0] : 1;
+          const y = args.length > 1 ? args[1] : x;
+          model.scaleX *= x;
+          model.scaleY *= y;
+          continue;
+        }
+        if (name === "rotate") {
+          const delta = args.length > 0 ? args[0] : 0;
+          model.rotateAngle += delta;
+          if (args.length >= 3) {
+            model.rotateCx = args[1];
+            model.rotateCy = args[2];
+            model.hasRotateCenter = true;
+          }
+          continue;
+        }
+        model.others.push(match[0].trim());
+      }
+      return model;
+    }
+    function serializeTransform(model) {
+      const parts = model.others.slice();
+      if (Math.abs(model.translateX) >= TRANSFORM_EPSILON || Math.abs(model.translateY) >= TRANSFORM_EPSILON) {
+        parts.push("translate(" + formatNumber(model.translateX) + " " + formatNumber(model.translateY) + ")");
+      }
+      if (Math.abs(model.scaleX - 1) >= TRANSFORM_EPSILON || Math.abs(model.scaleY - 1) >= TRANSFORM_EPSILON) {
+        if (Math.abs(model.scaleX - model.scaleY) < TRANSFORM_EPSILON) {
+          parts.push("scale(" + formatNumber(model.scaleX) + ")");
+        } else {
+          parts.push("scale(" + formatNumber(model.scaleX) + " " + formatNumber(model.scaleY) + ")");
+        }
+      }
+      const angle = normalizeAngle(model.rotateAngle);
+      if (Math.abs(angle) >= TRANSFORM_EPSILON) {
+        if (model.hasRotateCenter) {
+          parts.push("rotate(" + formatNumber(angle) + " " + formatNumber(model.rotateCx) + " " + formatNumber(model.rotateCy) + ")");
+        } else {
+          parts.push("rotate(" + formatNumber(angle) + ")");
+        }
+      }
+      return parts.join(" ").trim();
+    }
+    function applyTransform(target, model) {
+      const transformed = serializeTransform(model);
+      if (transformed) {
+        target.setAttribute("transform", transformed);
+      } else {
+        target.removeAttribute("transform");
+      }
     }
 
     function tagElements(root) {
@@ -543,6 +832,17 @@ export class SvgAllInOnePanel {
       const raw = element.getAttribute("data-aii-path");
       return raw ? raw.split(".").filter(Boolean).map((v) => Number(v)) : [];
     }
+    function findElementByPath(root, nodePath) {
+      let current = root;
+      for (const index of nodePath) {
+        const child = current.children.item(index);
+        if (!child) {
+          return undefined;
+        }
+        current = child;
+      }
+      return current === root ? undefined : current;
+    }
     function readAttributes(element) {
       const attrs = {};
       for (const attr of element.attributes) {
@@ -555,8 +855,10 @@ export class SvgAllInOnePanel {
       const hasSelection = Boolean(selected);
       rotateLeftButton.disabled = !hasSelection;
       rotateRightButton.disabled = !hasSelection;
+      scaleDownButton.disabled = !hasSelection;
+      scaleUpButton.disabled = !hasSelection;
       deleteButton.disabled = !hasSelection;
-      selectionInfoNode.textContent = hasSelection ? "已选中: <" + selected.tagName + ">" : "未选中元素";
+      selectionInfoNode.textContent = hasSelection ? "Selected: <" + selected.tagName + ">" : "No selection";
     }
     function postSelectionState() {
       const selected = selectedElement();
@@ -594,14 +896,56 @@ export class SvgAllInOnePanel {
       updateSelectionState();
       postSelectionState();
     }
-    function markDraftChanged() {
-      if (!state.svgRoot) return;
+    function serializeSvgRoot() {
       const body = new XMLSerializer().serializeToString(state.svgRoot);
-      const next = state.xmlDeclaration ? state.xmlDeclaration + "\\n" + body : body;
+      return state.xmlDeclaration ? state.xmlDeclaration + "\\n" + body : body;
+    }
+    function markDraftChanged(shouldPushHistory = true) {
+      if (!state.svgRoot) return;
+      const next = serializeSvgRoot();
+      if (next === state.rawSvgText) {
+        return;
+      }
       state.rawSvgText = next;
-      setDirty(true);
+      if (shouldPushHistory) {
+        pushHistory(next);
+      }
+      setDirty(isDraftDirty(next));
+      updateCanvasInfo();
+      refreshMiniMap();
       postSelectionState();
       vscode.postMessage({ type: "draftChanged", text: next });
+    }
+    function applyHistorySnapshot(nextIndex) {
+      if (nextIndex < 0 || nextIndex >= state.history.length) {
+        return;
+      }
+      const current = selectedElement();
+      const selectedPath = current ? readNodePath(current) : [];
+      const next = state.history[nextIndex];
+      if (typeof next !== "string") {
+        return;
+      }
+      state.historyIndex = nextIndex;
+      state.rawSvgText = next;
+      state.xmlDeclaration = parseXmlHeader(next);
+      hideContextMenu();
+      renderSvg(next, { selectedPath });
+      setDirty(isDraftDirty(next));
+      updateHistoryButtons();
+      vscode.postMessage({ type: "draftChanged", text: next });
+    }
+    function undoHistory() {
+      if (state.historyIndex <= 0) {
+        return;
+      }
+      applyHistorySnapshot(state.historyIndex - 1);
+    }
+    function redoHistory() {
+      if (state.historyIndex >= state.history.length - 1) {
+        return;
+      }
+      applyHistorySnapshot(state.historyIndex + 1);
     }
     function toSvgPoint(svg, x, y) {
       const point = svg.createSVGPoint();
@@ -619,7 +963,8 @@ export class SvgAllInOnePanel {
         pointerId: event.pointerId,
         originX: from.x,
         originY: from.y,
-        originalTransform: target.getAttribute("transform") || ""
+        baseTransformModel: parseTransform(target.getAttribute("transform") || ""),
+        moved: false
       };
       state.dragging = true;
       previewHost.classList.add("dragging");
@@ -633,17 +978,22 @@ export class SvgAllInOnePanel {
       const now = toSvgPoint(state.svgRoot, event.clientX, event.clientY);
       const dx = now.x - state.drag.originX;
       const dy = now.y - state.drag.originY;
-      target.setAttribute(
-        "transform",
-        (state.drag.originalTransform + " translate(" + dx.toFixed(2) + " " + dy.toFixed(2) + ")").trim()
-      );
+      const nextModel = cloneTransformModel(state.drag.baseTransformModel);
+      nextModel.translateX += dx;
+      nextModel.translateY += dy;
+      applyTransform(target, nextModel);
+      if (Math.abs(dx) >= TRANSFORM_EPSILON || Math.abs(dy) >= TRANSFORM_EPSILON) {
+        state.drag.moved = true;
+      }
       event.preventDefault();
     }
     function endDrag(event) {
       if (!state.dragging) return;
       state.dragging = false;
       previewHost.classList.remove("dragging");
-      if (state.drag && event.pointerId === state.drag.pointerId) markDraftChanged();
+      if (state.drag && event.pointerId === state.drag.pointerId && state.drag.moved) {
+        markDraftChanged();
+      }
       state.drag = undefined;
     }
     function rotateSelected(delta) {
@@ -651,10 +1001,27 @@ export class SvgAllInOnePanel {
       if (!target) return;
       let bbox;
       try { bbox = target.getBBox(); } catch (_) { return; }
-      const cx = (bbox.x + bbox.width / 2).toFixed(2);
-      const cy = (bbox.y + bbox.height / 2).toFixed(2);
-      const existing = target.getAttribute("transform") || "";
-      target.setAttribute("transform", (existing + " rotate(" + delta + " " + cx + " " + cy + ")").trim());
+      const model = parseTransform(target.getAttribute("transform") || "");
+      model.rotateAngle += delta;
+      model.rotateCx = bbox.x + bbox.width / 2;
+      model.rotateCy = bbox.y + bbox.height / 2;
+      model.hasRotateCenter = true;
+      applyTransform(target, model);
+      markDraftChanged();
+    }
+    function scaleSelected(factor) {
+      const target = selectedElement();
+      if (!target || factor <= 0) return;
+      let bbox;
+      try { bbox = target.getBBox(); } catch (_) { return; }
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const model = parseTransform(target.getAttribute("transform") || "");
+      model.translateX += cx * (1 - factor);
+      model.translateY += cy * (1 - factor);
+      model.scaleX *= factor;
+      model.scaleY *= factor;
+      applyTransform(target, model);
       markDraftChanged();
     }
     function deleteSelected() {
@@ -667,8 +1034,61 @@ export class SvgAllInOnePanel {
     function nudgeSelected(dx, dy) {
       const target = selectedElement();
       if (!target) return;
-      const existing = target.getAttribute("transform") || "";
-      target.setAttribute("transform", (existing + " translate(" + dx + " " + dy + ")").trim());
+      const model = parseTransform(target.getAttribute("transform") || "");
+      model.translateX += dx;
+      model.translateY += dy;
+      applyTransform(target, model);
+      markDraftChanged();
+    }
+    function adjustResolution() {
+      if (!state.svgRoot) {
+        return;
+      }
+      const current = readResolutionFromRoot(state.svgRoot);
+      if (!current) {
+        setError("Cannot detect current canvas resolution.");
+        return;
+      }
+      const modeInput = window.prompt("Resize mode: p=proportional, f=free", "p");
+      if (modeInput === null) {
+        return;
+      }
+      let nextWidth = current.width;
+      let nextHeight = current.height;
+      const mode = modeInput.trim().toLowerCase();
+      if (mode.startsWith("p")) {
+        const ratioInput = window.prompt("Scale ratio (example: 1.5)", "1");
+        if (ratioInput === null) {
+          return;
+        }
+        const ratio = Number(ratioInput.trim());
+        if (!Number.isFinite(ratio) || ratio <= 0) {
+          setError("Invalid ratio.");
+          return;
+        }
+        nextWidth = current.width * ratio;
+        nextHeight = current.height * ratio;
+      } else {
+        const widthInput = window.prompt("Canvas width (px)", String(Math.round(current.width)));
+        if (widthInput === null) {
+          return;
+        }
+        const heightInput = window.prompt("Canvas height (px)", String(Math.round(current.height)));
+        if (heightInput === null) {
+          return;
+        }
+        const width = Number(widthInput.trim());
+        const height = Number(heightInput.trim());
+        if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+          setError("Width and height must be positive numbers.");
+          return;
+        }
+        nextWidth = width;
+        nextHeight = height;
+      }
+      setError("");
+      state.svgRoot.setAttribute("width", String(Math.max(1, Math.round(nextWidth))));
+      state.svgRoot.setAttribute("height", String(Math.max(1, Math.round(nextHeight))));
       markDraftChanged();
     }
 
@@ -791,10 +1211,14 @@ export class SvgAllInOnePanel {
       vscode.postMessage({ type: "copyToClipboard", text: colors[0] });
     }
 
-    function renderSvg(svgText) {
+    function renderSvg(svgText, options = {}) {
       if (!svgText.trim()) {
+        state.svgRoot = undefined;
+        state.canvasStage = undefined;
         previewHost.innerHTML = "";
         clearSelection();
+        updateCanvasInfo();
+        refreshMiniMap();
         setError("");
         return;
       }
@@ -803,7 +1227,11 @@ export class SvgAllInOnePanel {
         tagElements(root);
         state.svgRoot = root;
         previewHost.innerHTML = "";
-        previewHost.appendChild(root);
+        const stage = document.createElement("div");
+        stage.className = "canvas-stage";
+        stage.appendChild(root);
+        previewHost.appendChild(stage);
+        state.canvasStage = stage;
         setError("");
 
         root.addEventListener("click", (event) => {
@@ -828,10 +1256,27 @@ export class SvgAllInOnePanel {
         root.addEventListener("pointermove", moveDrag);
         root.addEventListener("pointerup", endDrag);
         root.addEventListener("pointercancel", endDrag);
+
+        const selectedPath = Array.isArray(options.selectedPath) ? options.selectedPath : [];
+        clearSelection();
+        if (selectedPath.length) {
+          const restored = findElementByPath(root, selectedPath);
+          if (restored) {
+            selectElement(restored);
+          }
+        }
+        applyCanvasZoom();
+        updateCanvasInfo();
+        refreshMiniMap();
       } catch (error) {
+        state.svgRoot = undefined;
+        state.canvasStage = undefined;
         const message = error instanceof Error ? error.message : String(error);
-        setError("SVG 解析失败: " + message);
+        setError("SVG parse failed: " + message);
       }
+    }
+    function isEditableInputTarget(target) {
+      return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
     }
 
     for (const button of document.querySelectorAll("[data-op]")) {
@@ -840,9 +1285,17 @@ export class SvgAllInOnePanel {
       });
     }
     saveButton.addEventListener("click", () => vscode.postMessage({ type: "requestSave" }));
+    undoButton.addEventListener("click", undoHistory);
+    redoButton.addEventListener("click", redoHistory);
     rotateLeftButton.addEventListener("click", () => rotateSelected(-15));
     rotateRightButton.addEventListener("click", () => rotateSelected(15));
+    scaleDownButton.addEventListener("click", () => scaleSelected(1 / SCALE_FACTOR));
+    scaleUpButton.addEventListener("click", () => scaleSelected(SCALE_FACTOR));
     deleteButton.addEventListener("click", deleteSelected);
+    zoomOutButton.addEventListener("click", () => setCanvasZoom(state.canvasZoom - ZOOM_STEP));
+    zoomResetButton.addEventListener("click", () => setCanvasZoom(1));
+    zoomInButton.addEventListener("click", () => setCanvasZoom(state.canvasZoom + ZOOM_STEP));
+    resolutionButton.addEventListener("click", adjustResolution);
     menuEditColor.addEventListener("click", (event) => {
       event.stopPropagation();
       editSelectedColor();
@@ -875,6 +1328,42 @@ export class SvgAllInOnePanel {
     window.addEventListener("click", () => hideContextMenu());
     window.addEventListener("scroll", () => hideContextMenu(), { passive: true });
     window.addEventListener("keydown", (event) => {
+      if (isEditableInputTarget(event.target)) {
+        return;
+      }
+      const key = String(event.key || "").toLowerCase();
+      const withCommand = event.ctrlKey || event.metaKey;
+      if (withCommand && !event.altKey) {
+        if (key === "z") {
+          if (event.shiftKey) {
+            redoHistory();
+          } else {
+            undoHistory();
+          }
+          event.preventDefault();
+          return;
+        }
+        if (key === "y") {
+          redoHistory();
+          event.preventDefault();
+          return;
+        }
+        if (key === "=" || key === "+") {
+          setCanvasZoom(state.canvasZoom + ZOOM_STEP);
+          event.preventDefault();
+          return;
+        }
+        if (key === "-") {
+          setCanvasZoom(state.canvasZoom - ZOOM_STEP);
+          event.preventDefault();
+          return;
+        }
+        if (key === "0") {
+          setCanvasZoom(1);
+          event.preventDefault();
+          return;
+        }
+      }
       if (!selectedElement()) return;
       const step = event.shiftKey ? 10 : 1;
       if (event.key === "ArrowUp") { nudgeSelected(0, -step); event.preventDefault(); }
@@ -885,25 +1374,43 @@ export class SvgAllInOnePanel {
     });
 
     window.addEventListener("message", (event) => {
-      const message = event.data;
+      const message = event.data || {};
       if (message.type === "document") {
         fileNameNode.textContent = message.fileName || "-";
-        state.xmlDeclaration = parseXmlHeader(message.text || "");
-        state.rawSvgText = message.text || "";
+        state.baseSvgText = message.text || "";
+        state.rawSvgText = state.baseSvgText;
+        state.xmlDeclaration = parseXmlHeader(state.rawSvgText);
+        state.canvasZoom = 1;
         hideContextMenu();
-        clearSelection();
         renderSvg(state.rawSvgText);
-      } else if (message.type === "dirtyState") {
-        setDirty(Boolean(message.dirty));
-      } else if (message.type === "saved") {
-        state.rawSvgText = message.text || state.rawSvgText;
+        state.originalResolution = readResolutionFromRoot(state.svgRoot);
+        updateCanvasInfo();
+        resetHistory(state.rawSvgText);
         setDirty(false);
-        renderSvg(state.rawSvgText);
+      } else if (message.type === "dirtyState") {
+        setDirty(Boolean(message.dirty) || isDraftDirty(state.rawSvgText));
+      } else if (message.type === "saved") {
+        const current = selectedElement();
+        const selectedPath = current ? readNodePath(current) : [];
+        state.baseSvgText = message.text || state.baseSvgText;
+        state.rawSvgText = message.text || state.rawSvgText;
+        state.xmlDeclaration = parseXmlHeader(state.rawSvgText);
+        hideContextMenu();
+        renderSvg(state.rawSvgText, { selectedPath });
+        if (state.history[state.historyIndex] !== state.rawSvgText) {
+          pushHistory(state.rawSvgText);
+        } else {
+          updateHistoryButtons();
+        }
+        setDirty(false);
       }
     });
 
     setDirty(false);
+    updateHistoryButtons();
     updateSelectionState();
+    updateCanvasInfo();
+    refreshMiniMap();
     vscode.postMessage({ type: "ready" });
   </script>
 </body>
@@ -919,4 +1426,5 @@ function getNonce(): string {
   }
   return value;
 }
+
 
