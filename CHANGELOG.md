@@ -4,29 +4,40 @@ English | [简体中文](./CHANGELOG.zh-CN.md)
 
 All notable changes to this project are documented in this file.
 
+## [0.1.1] - 2026-04-13
+
+### Fixed
+- Release packaging now includes runtime dependencies by default, fixing `command not found` issues after installation.
+- SVG toolkit dependencies (`@resvg/resvg-js`, `svgo`, `xml-formatter`) are lazy-loaded with explicit runtime error messages, so missing packages no longer crash extension activation globally.
+
+### Changed
+- Added fallback scripts for troubleshooting only:
+- `package:vsix:no-deps`
+- `publish:vsix:no-deps`
+
 ## [0.1.0] - 2026-04-11
 
 ### Added
 - Split SVG source + preview workflow in a dedicated panel.
 - Top toolbar operations: format, cleanup, compress, save, export PNG, export multi-scale PNG.
 - Interactive element editing in preview:
-  - Drag move
-  - Rotate left/right (15deg step)
-  - Scale up/down (10% step)
-  - Delete selected element
+- Drag move
+- Rotate left/right (15deg step)
+- Scale up/down (10% step)
+- Delete selected element
 - Preview editing state management:
-  - Undo / redo
-  - Dirty state and save prompt when closing panel
-  - Live sync back to source editor
+- Undo / redo
+- Dirty state and save prompt when closing panel
+- Live sync back to source editor
 - Context-menu color tools on selected node:
-  - Modify color
-  - Extract color
+- Modify color
+- Extract color
 - Selected-node attribute sidebar:
-  - Precise edit / add / remove attribute
+- Precise edit / add / remove attribute
 - SVG diagnostics:
-  - Invalid/common-illegal attributes
-  - Duplicate `id`
-  - Basic accessibility checks
+- Invalid/common-illegal attributes
+- Duplicate `id`
+- Basic accessibility checks
 - SVG completion/snippet-like suggestions for tags, attributes, and common attribute values.
 
 ### Changed

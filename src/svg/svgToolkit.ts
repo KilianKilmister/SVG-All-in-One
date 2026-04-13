@@ -1,6 +1,72 @@
-import { Resvg } from "@resvg/resvg-js";
-import { optimize } from "svgo";
-import xmlFormatter from "xml-formatter";
+type XmlFormatterFn = (xml: string, options?: Record<string, unknown>) => string;
+type OptimizeFn = typeof import("svgo").optimize;
+type ResvgCtor = typeof import("@resvg/resvg-js").Resvg;
+
+let xmlFormatterFn: XmlFormatterFn | undefined;
+let optimizeFn: OptimizeFn | undefined;
+let resvgCtor: ResvgCtor | undefined;
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function missingDependencyError(packageName: string, error: unknown): Error {
+  return new Error(
+    `Missing runtime dependency "${packageName}". Reinstall dependencies and publish without --no-dependencies. Details: ${errorMessage(error)}`
+  );
+}
+
+function getXmlFormatter(): XmlFormatterFn {
+  if (xmlFormatterFn) {
+    return xmlFormatterFn;
+  }
+  try {
+    const loaded = require("xml-formatter") as { default?: XmlFormatterFn } | XmlFormatterFn;
+    const formatter = (typeof loaded === "function" ? loaded : loaded.default) as XmlFormatterFn | undefined;
+    if (typeof formatter !== "function") {
+      throw new Error("Invalid xml-formatter export.");
+    }
+    xmlFormatterFn = formatter;
+    return formatter;
+  } catch (error) {
+    throw missingDependencyError("xml-formatter", error);
+  }
+}
+
+function getOptimize(): OptimizeFn {
+  if (optimizeFn) {
+    return optimizeFn;
+  }
+  try {
+    const loaded = require("svgo") as { optimize?: OptimizeFn };
+    if (typeof loaded.optimize !== "function") {
+      throw new Error("Invalid svgo export.");
+    }
+    optimizeFn = loaded.optimize;
+    return loaded.optimize;
+  } catch (error) {
+    throw missingDependencyError("svgo", error);
+  }
+}
+
+function getResvgCtor(): ResvgCtor {
+  if (resvgCtor) {
+    return resvgCtor;
+  }
+  try {
+    const loaded = require("@resvg/resvg-js") as { Resvg?: ResvgCtor };
+    if (typeof loaded.Resvg !== "function") {
+      throw new Error("Invalid @resvg/resvg-js export.");
+    }
+    resvgCtor = loaded.Resvg;
+    return loaded.Resvg;
+  } catch (error) {
+    throw missingDependencyError("@resvg/resvg-js", error);
+  }
+}
 
 const COLOR_ATTRS = [
   "fill",
@@ -51,7 +117,7 @@ export function cleanupSvgContent(svg: string): string {
 }
 
 export function formatSvgContent(svg: string): string {
-  return xmlFormatter(svg, {
+  return getXmlFormatter()(svg, {
     indentation: "  ",
     lineSeparator: "\n",
     collapseContent: true,
@@ -60,7 +126,7 @@ export function formatSvgContent(svg: string): string {
 }
 
 export function compressSvgContent(svg: string): string {
-  const result = optimize(svg, {
+  const result = getOptimize()(svg, {
     multipass: true,
     js2svg: {
       pretty: false,
@@ -179,6 +245,7 @@ export function inferSvgBaseWidth(svg: string): number | undefined {
 export function renderSvgToPng(svg: string, width?: number): Uint8Array {
   // Resvg fitTo width keeps aspect ratio and provides deterministic @Nx outputs.
   const fitWidth = width && Number.isFinite(width) && width > 0 ? Math.round(width) : undefined;
+  const Resvg = getResvgCtor();
   const resvg = new Resvg(svg, fitWidth ? { fitTo: { mode: "width", value: fitWidth } } : undefined);
   return resvg.render().asPng();
 }
