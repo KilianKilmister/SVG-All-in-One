@@ -22,6 +22,11 @@ const excludedNames = new Set([
   ".tmp-vsix-inspect.zip"
 ]);
 
+/**
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string} cwd
+*/
 function run(command, args, cwd) {
   const result = childProcess.spawnSync(command, args, {
     cwd,

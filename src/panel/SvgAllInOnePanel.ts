@@ -1,5 +1,6 @@
 ﻿import * as path from "path";
 import * as vscode from "vscode";
+import * as l10n from '@vscode/l10n';
 import {
   runExportPng,
   runExportPngVariants,
@@ -61,7 +62,7 @@ export class SvgAllInOnePanel {
 
     const panel = vscode.window.createWebviewPanel(
       "svgAllInOne.preview",
-      "SVG Preview",
+      l10n.t("SVG Preview"),
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       {
         enableScripts: true,
@@ -100,7 +101,7 @@ export class SvgAllInOnePanel {
     this.currentDocument = document;
     this.attributeSidebar = attributeSidebar;
 
-    this.panel.title = `SVG Preview - ${path.basename(document.uri.fsPath || document.uri.path)}`;
+    this.panel.title = l10n.t("SVG Preview - {0}", path.basename(document.uri.fsPath || document.uri.path));
     this.panel.webview.html = this.getWebviewHtml(this.panel.webview);
     this.bindEvents();
     void this.pushDocumentToWebview();
@@ -183,7 +184,7 @@ export class SvgAllInOnePanel {
     }
 
     this.currentDocument = document;
-    this.panel.title = `SVG Preview - ${path.basename(document.uri.fsPath || document.uri.path)}`;
+    this.panel.title = l10n.t("SVG Preview - {0}", path.basename(document.uri.fsPath || document.uri.path));
     this.attributeSidebar.clearSelection();
     this.pendingWebviewSyncTexts = [];
     this.isDirty = false;
@@ -214,7 +215,7 @@ export class SvgAllInOnePanel {
             this.pendingWebviewSyncTexts = this.pendingWebviewSyncTexts.filter(
               (pendingText) => pendingText.trim() !== cleaned.trim()
             );
-            void vscode.window.showErrorMessage("同步 SVG 到编辑器失败。");
+            void vscode.window.showErrorMessage(l10n.t("Syncing SVG to the editor failed"));
             return;
           }
         } finally {
@@ -242,7 +243,7 @@ export class SvgAllInOnePanel {
 
     if (message.type === "copyToClipboard" && typeof message.text === "string") {
       await vscode.env.clipboard.writeText(message.text);
-      void vscode.window.showInformationMessage(`已复制颜色：${message.text}`);
+      void vscode.window.showInformationMessage(l10n.t("Color copied: {0}", message.text));
       return;
     }
 
@@ -280,19 +281,19 @@ export class SvgAllInOnePanel {
     const modePick = await vscode.window.showQuickPick(
       [
         {
-          label: "按比例调整",
-          description: "输入缩放比例（例如 1.5）",
+          label: l10n.t("Adjust proportionally"),
+          description: l10n.t("Enter scale factor (e.g., 1.5)"),
           mode: "proportional" as const
         },
         {
-          label: "自由调整",
-          description: "分别输入宽度和高度",
+          label: l10n.t("Free adjustment"),
+          description: l10n.t("Enter width and height respectively"),
           mode: "free" as const
         }
       ],
       {
-        title: "调整 SVG 画布分辨率",
-        placeHolder: "请选择调整方式"
+        title: l10n.t("Adjust SVG canvas resolution"),
+        placeHolder: l10n.t("Please select the adjustment method")
       }
     );
 
@@ -302,12 +303,12 @@ export class SvgAllInOnePanel {
 
     if (modePick.mode === "proportional") {
       const ratioInput = await vscode.window.showInputBox({
-        title: "按比例调整画布",
-        prompt: "输入缩放比例（> 0）",
+        title: l10n.t("Adjust the canvas proportionally"),
+        prompt: l10n.t("Enter the scale factor (> 0)"),
         value: "1",
         validateInput: (value) => {
           const ratio = Number(value.trim());
-          return Number.isFinite(ratio) && ratio > 0 ? undefined : "请输入大于 0 的数字";
+          return Number.isFinite(ratio) && ratio > 0 ? undefined : l10n.t("Please enter a number greater than 0");
         }
       });
 
@@ -325,15 +326,15 @@ export class SvgAllInOnePanel {
     }
 
     const widthInput = await vscode.window.showInputBox({
-      title: "设置画布宽度",
-      prompt: "输入像素宽度（> 0）",
+      title: l10n.t("Set canvas width"),
+      prompt: l10n.t("Enter width in pixels (> 0)"),
       value:
         typeof currentWidth === "number" && Number.isFinite(currentWidth)
           ? String(Math.max(1, Math.round(currentWidth)))
           : "512",
       validateInput: (value) => {
         const width = Number(value.trim());
-        return Number.isFinite(width) && width > 0 ? undefined : "请输入大于 0 的数字";
+        return Number.isFinite(width) && width > 0 ? undefined : l10n.t("Please enter a number greater than 0");
       }
     });
     if (!widthInput) {
@@ -341,15 +342,15 @@ export class SvgAllInOnePanel {
     }
 
     const heightInput = await vscode.window.showInputBox({
-      title: "设置画布高度",
-      prompt: "输入像素高度（> 0）",
+      title: l10n.t("Set canvas height"),
+      prompt: l10n.t("Enter height in pixels (> 0)"),
       value:
         typeof currentHeight === "number" && Number.isFinite(currentHeight)
           ? String(Math.max(1, Math.round(currentHeight)))
           : "512",
       validateInput: (value) => {
         const height = Number(value.trim());
-        return Number.isFinite(height) && height > 0 ? undefined : "请输入大于 0 的数字";
+        return Number.isFinite(height) && height > 0 ? undefined : l10n.t("Please enter a number greater than 0");
       }
     });
     if (!heightInput) {
@@ -394,7 +395,7 @@ export class SvgAllInOnePanel {
       }
       const saved = await this.currentDocument.save();
       if (!saved) {
-        void vscode.window.showErrorMessage("保存失败：VS Code 未能保存当前 SVG 文件。");
+        void vscode.window.showErrorMessage(l10n.t("Save failed: VS Code failed to save the current SVG file"));
         return false;
       }
       return true;
@@ -409,7 +410,7 @@ export class SvgAllInOnePanel {
         });
       }
       if (persisted && showSavedMessage) {
-        void vscode.window.showInformationMessage("预览修改已保存。");
+        void vscode.window.showInformationMessage(l10n.t("Preview changes have been saved"));
       }
       return persisted;
     }
@@ -431,7 +432,7 @@ export class SvgAllInOnePanel {
       await this.panel.webview.postMessage({ type: "saved", text: cleaned });
 
       if (showSavedMessage) {
-        void vscode.window.showInformationMessage("预览修改已保存。");
+        void vscode.window.showInformationMessage(l10n.t("Preview changes have been saved"));
       }
       return true;
     }
@@ -440,7 +441,7 @@ export class SvgAllInOnePanel {
     try {
       const applied = await replaceWholeDocument(this.currentDocument, cleaned);
       if (!applied) {
-        void vscode.window.showErrorMessage("保存失败：无法写入 SVG 文件。");
+        void vscode.window.showErrorMessage(l10n.t("Save failed: Unable to write to SVG file"));
         return false;
       }
     } finally {
@@ -460,23 +461,23 @@ export class SvgAllInOnePanel {
     await this.panel.webview.postMessage({ type: "saved", text: cleaned });
 
     if (showSavedMessage) {
-      void vscode.window.showInformationMessage("预览修改已保存。");
+      void vscode.window.showInformationMessage(l10n.t("Preview changes have been saved"));
     }
     return true;
   }
 
   private async promptSaveBeforeSwitch(): Promise<boolean> {
     const choice = await vscode.window.showWarningMessage(
-      "当前预览有未保存改动。切换文件前是否保存？",
-      "保存",
-      "不保存",
-      "取消"
+      l10n.t("The current preview contains unsaved changes."),
+      l10n.t("Keep"),
+      l10n.t("Don't save"),
+      l10n.t("Cancel")
     );
 
-    if (choice === "取消") {
+    if (choice === l10n.t("Cancel")) {
       return false;
     }
-    if (choice === "保存") {
+    if (choice === l10n.t("Keep")) {
       return this.saveDraft(false, true);
     }
 
@@ -491,11 +492,11 @@ export class SvgAllInOnePanel {
 
     if (this.isDirty) {
       const choice = await vscode.window.showWarningMessage(
-        "关闭预览时检测到未保存改动，是否保存？",
-        "保存",
-        "不保存"
+        l10n.t("Unsaved changes were detected when the preview was closed"),
+        l10n.t("Keep"),
+        l10n.t("Don't save")
       );
-      if (choice === "保存") {
+      if (choice === l10n.t("Keep")) {
         await this.saveDraft(false, true);
       }
     }
@@ -521,8 +522,8 @@ export class SvgAllInOnePanel {
   private getWebviewHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const csp = `default-src 'none'; img-src ${webview.cspSource} data: blob:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
-
-    return `<!DOCTYPE html>
+// @todo: move html to file
+    return String.raw`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -573,47 +574,57 @@ export class SvgAllInOnePanel {
   <div class="root">
     <div class="toolbar">
       <div class="group">
-        <button data-op="format">Format</button>
-        <button data-op="cleanup">Cleanup</button>
-        <button data-op="compress">Compress</button>
+        <button data-op="format">${l10n.t("Format")}</button>
+        <button data-op="cleanup">${l10n.t("Cleanup")}</button>
+        <button data-op="compress">${l10n.t("Compress")}</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button id="undoButton" disabled>Undo</button>
-        <button id="redoButton" disabled>Redo</button>
+        <button id="undoButton" disabled>${l10n.t("Undo")}</button>
+        <button id="redoButton" disabled>${l10n.t("Redo")}</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button id="rotateLeft" disabled>Rotate Left 15°</button>
-        <button id="rotateRight" disabled>Rotate Right 15°</button>
-        <button id="scaleDown" disabled>Scale -10%</button>
-        <button id="scaleUp" disabled>Scale +10%</button>
-        <button id="deleteElement" disabled>Delete</button>
+        <button id="rotateLeft" disabled>${l10n.t("Rotate Left 15°")}</button>
+        <button id="rotateRight" disabled>${l10n.t("Rotate Right 15°")}</button>
+        <button id="scaleDown" disabled>${l10n.t("Scale -10%")}</button>
+        <button id="scaleUp" disabled>${l10n.t("Scale +10%")}</button>
+        <button id="deleteElement" disabled>${l10n.t("Delete")}</button>
       </div>
       <div class="group">
-        <button id="resolutionButton">Resize</button>
+        <button id="resolutionButton">${l10n.t("Resize")}</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button id="saveButton" disabled>Save</button>
+        <button id="saveButton" disabled>${l10n.t("Save")}</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button data-op="exportPng">Export PNG</button>
-        <button data-op="exportPngVariants">Export Variants</button>
+        <button data-op="exportPng">${l10n.t("Export PNG")}</button>
+        <button data-op="exportPngVariants">${l10n.t("Export Variants")}</button>
       </div>
     </div>
-    <div class="meta"><div id="fileName">-</div><div id="canvasInfo">Zoom 100% | Canvas - | Original -</div><div id="selectionInfo">No selection</div></div>
+    <div class="meta"><div id="fileName">-</div><div id="canvasInfo">${l10n.t("Zoom 100% | Canvas - | Original -")}</div><div id="selectionInfo">${l10n.t("No selection")}</div></div>
     <div id="previewHost"></div>
-    <div class="status"><span id="dirtyState" class="saved">Saved</span><span>Right click selected element: Edit color / Extract color</span></div>
+    <div class="status"><span id="dirtyState" class="saved">${l10n.t("Saved")}</span><span>${l10n.t("Right click selected element: Edit color / Extract color")}</span></div>
     <div class="error" id="error"></div>
   </div>
   <div class="ctx" id="contextMenu">
-    <button id="menuEditColor">修改颜色</button>
-    <button id="menuExtractColor">提取颜色</button>
+    <!-- @todo: localize -->
+    <button id="menuEditColor">${l10n.t("Modify color")}</button>
+    <button id="menuExtractColor">${l10n.t("Extract color")}</button>
     <div id="menuColorEditor" class="color-editor">
       <div id="menuColorSwatches" class="swatches"></div>
       <div class="color-row">
         <input id="menuColorValue" type="text" value="#22c55e" placeholder="#22c55e / rgb(34,197,94)" />
-        <input id="menuNativeColor" class="native-color" type="color" value="#22c55e" title="系统色盘" />
-        <button id="menuApplyColor" class="apply-color">应用</button>
+        <input id="menuNativeColor" class="native-color" type="color" value="#22c55e" title="${l10n.t("System color palette")}" />
+        <button id="menuApplyColor" class="apply-color">${l10n.t("Apply")}</button>
       </div>
     </div>
   </div>
 
   <script nonce="${nonce}">
+    const template = ((regex) =>
+      /**
+       * @param {string} str
+       * @param {string[]} params
+       */
+      function template (str, ...params) {
+        return str.replaceAll(regex, (_, group) => params[group])
+      }
+    )(/\{([^}]+?)\}/g)
     const vscode = acquireVsCodeApi();
     const previewHost = document.getElementById("previewHost");
     const errorNode = document.getElementById("error");
@@ -720,7 +731,7 @@ export class SvgAllInOnePanel {
       contextMenu.style.display = "block";
     }
     function parseXmlHeader(text) {
-      const match = text.match(/^\\s*(<\\?xml[\\s\\S]*?\\?>)/i);
+      const match = text.match(/^\s*(<\?xml[\s\S]*?\?>)/i);
       return match ? match[1] : "";
     }
 
@@ -770,7 +781,7 @@ export class SvgAllInOnePanel {
       const currentText = formatResolution(current);
       const originalText = formatResolution(state.originalResolution || current);
       const zoomValue = Math.round(state.canvasZoom * 100);
-      canvasInfoNode.textContent = "Zoom " + zoomValue + "% | Canvas " + currentText + " | Original " + originalText;
+      canvasInfoNode.textContent = template("${l10n.t("Zoom {0}% | Canvas {1} | Original {2}")}", zoomValue, currentText, originalText);
     }
     function clamp(value, min, max) {
       return Math.min(max, Math.max(min, value));
@@ -1089,7 +1100,7 @@ export class SvgAllInOnePanel {
     }
     function serializeSvgRoot() {
       const body = new XMLSerializer().serializeToString(state.svgRoot);
-      return state.xmlDeclaration ? state.xmlDeclaration + "\\n" + body : body;
+      return state.xmlDeclaration ? state.xmlDeclaration + "\n" + body : body;
     }
     function markDraftChanged(shouldPushHistory = true) {
       if (!state.svgRoot) return;
@@ -1237,7 +1248,7 @@ export class SvgAllInOnePanel {
       }
       const current = readResolutionFromRoot(state.svgRoot);
       if (!current) {
-        setError("Cannot detect current canvas resolution.");
+        setError("${l10n.t("Cannot detect current canvas resolution.")}");
         return;
       }
       vscode.postMessage({
@@ -1252,7 +1263,7 @@ export class SvgAllInOnePanel {
       }
       const current = readResolutionFromRoot(state.svgRoot);
       if (!current) {
-        setError("Cannot detect current canvas resolution.");
+        setError("${l10n.t("Cannot detect current canvas resolution.")}");
         return;
       }
       let nextWidth = current.width;
@@ -1260,7 +1271,7 @@ export class SvgAllInOnePanel {
       if (payload.resizeMode === "proportional") {
         const ratio = Number(payload.ratio);
         if (!Number.isFinite(ratio) || ratio <= 0) {
-          setError("Invalid ratio.");
+          setError("${l10n.t("Invalid ratio.")}");
           return;
         }
         nextWidth = current.width * ratio;
@@ -1269,7 +1280,7 @@ export class SvgAllInOnePanel {
         const width = Number(payload.width);
         const height = Number(payload.height);
         if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
-          setError("Width and height must be positive numbers.");
+          setError("${l10n.t("Width and height must be positive numbers.")}");
           return;
         }
         nextWidth = width;
@@ -1277,7 +1288,7 @@ export class SvgAllInOnePanel {
       } else {
         return;
       }
-      setError("");
+      setError("");// @review: <- what's this?
       state.svgRoot.setAttribute("width", String(Math.max(1, Math.round(nextWidth))));
       state.svgRoot.setAttribute("height", String(Math.max(1, Math.round(nextHeight))));
       markDraftChanged();
@@ -1287,14 +1298,14 @@ export class SvgAllInOnePanel {
       const colors = [];
       for (const attr of COLOR_ATTRS) {
         const value = element.getAttribute(attr);
-        if (value && !/^none$/i.test(value) && !/^url\\(/i.test(value)) colors.push(value.trim());
+        if (value && !/^none$/i.test(value) && !/^url\(/i.test(value)) colors.push(value.trim());
       }
       const style = element.getAttribute("style");
       if (style) {
-        const rx = /(fill|stroke|stop-color|flood-color|lighting-color|color)\\s*:\\s*([^;]+)/gi;
+        const rx = /(fill|stroke|stop-color|flood-color|lighting-color|color)\s*:\s*([^;]+)/gi;
         for (const match of style.matchAll(rx)) {
           const value = (match[2] || "").trim();
-          if (value && !/^none$/i.test(value) && !/^url\\(/i.test(value)) colors.push(value);
+          if (value && !/^none$/i.test(value) && !/^url\(/i.test(value)) colors.push(value);
         }
       }
       return Array.from(new Set(colors));
@@ -1311,14 +1322,14 @@ export class SvgAllInOnePanel {
       document.body.appendChild(probe);
       const computed = getComputedStyle(probe).color;
       probe.remove();
-      const m = computed.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/i);
+      const m = computed.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
       if (!m) return "#22c55e";
       const toHex = (n) => Number(n).toString(16).padStart(2, "0");
       return "#" + toHex(m[1]) + toHex(m[2]) + toHex(m[3]);
     }
     function replaceStyleColors(style, color) {
       return style.replace(
-        /(fill|stroke|stop-color|flood-color|lighting-color|color)\\s*:\\s*([^;]+)/gi,
+        /(fill|stroke|stop-color|flood-color|lighting-color|color)\s*:\s*([^;]+)/gi,
         (_all, prop) => prop + ": " + color
       );
     }
@@ -1349,7 +1360,7 @@ export class SvgAllInOnePanel {
     function applyMenuColor() {
       const value = menuColorValue.value.trim();
       if (!isValidCssColor(value)) {
-        setError("颜色格式无效，请输入如 #22c55e 或 rgb(34,197,94)");
+        setError("${l10n.t("Please enter a valid css color.")}");
         return;
       }
       setError("");
@@ -1394,7 +1405,7 @@ export class SvgAllInOnePanel {
       if (!target) return;
       const colors = collectColors(target);
       if (!colors.length) {
-        setError("当前元素没有可提取颜色。");
+        setError("${l10n.t("The current element doesn't have a color to extract")}");
         hideContextMenu();
         return;
       }
@@ -1461,7 +1472,7 @@ export class SvgAllInOnePanel {
         state.svgRoot = undefined;
         state.canvasStage = undefined;
         const message = error instanceof Error ? error.message : String(error);
-        setError("SVG parse failed: " + message);
+        setError(template("${l10n.t("SVG parse failed: {0}", "{0}")}", message));
       }
     }
     function isEditableInputTarget(target) {
@@ -1633,5 +1644,3 @@ function getNonce(): string {
   }
   return value;
 }
-
-

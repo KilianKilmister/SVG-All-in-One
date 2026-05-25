@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
     "module": "nodenext",
     "lib": [
-      "ES2022",
+      "ESNext",
       "DOM"
     ],
-    "outDir": "out",
-    "rootDir": "src",
+    "noEmit": true,
+    "rootDir": "../scripts/",
     "strict": true,
     "sourceMap": true,
     "moduleResolution": "nodenext",
@@ -20,6 +19,6 @@
     ]
   },
   "include": [
-    "src"
+    "../scripts/"
   ]
 }

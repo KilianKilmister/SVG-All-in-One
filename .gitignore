@@ -4,3 +4,4 @@ out
 *.log
 testFolder/
 .tmp-*
+package-lock.json

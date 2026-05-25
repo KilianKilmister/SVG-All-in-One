@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as l10n from '@vscode/l10n';
 import * as vscode from "vscode";
 import {
   cleanupSvgContent,
@@ -19,9 +20,9 @@ interface TransformOptions {
 }
 
 const OPERATION_LABELS: Record<SvgTextOperation, string> = {
-  format: "格式化",
-  cleanup: "清理无用字符",
-  compress: "压缩"
+  format: l10n.t("Format"),
+  cleanup: l10n.t("Cleanup"),
+  compress: l10n.t("Compress")
 };
 
 function transformByOperation(svg: string, operation: SvgTextOperation): string {
@@ -45,14 +46,14 @@ async function applySvgTransform(
 
   if (next === source) {
     if (options?.showMessage !== false) {
-      vscode.window.showInformationMessage("SVG 内容没有变化。");
+      vscode.window.showInformationMessage(l10n.t("SVG remains unchanged"));
     }
     return false;
   }
 
   const applied = await replaceWholeDocument(document, next);
   if (!applied) {
-    vscode.window.showErrorMessage("写入 SVG 内容失败。");
+    vscode.window.showErrorMessage(l10n.t("Failed to write SVG"));
     return false;
   }
 
@@ -73,7 +74,7 @@ async function getSvgDocument(uri?: vscode.Uri): Promise<vscode.TextDocument | u
 function validateColorInput(color: string): string | undefined {
   const value = color.trim();
   if (!value) {
-    return "颜色不能为空";
+    return l10n.t("Color may not be empty");
   }
 
   const patterns = [
@@ -84,7 +85,7 @@ function validateColorInput(color: string): string | undefined {
   ];
   return patterns.some((pattern) => pattern.test(value))
     ? undefined
-    : "请输入有效颜色（例如 #0ea5e9 / rgb(14,165,233) / red）";
+    : l10n.t("Please enter a valid CSS color.");
 }
 
 function parseScales(input: string): number[] | undefined {
@@ -106,12 +107,12 @@ async function readBaseWidth(svg: string): Promise<number | undefined> {
   }
 
   const entered = await vscode.window.showInputBox({
-    title: "输入基础宽度（像素）",
-    prompt: "用于多倍率 PNG 导出；如无 width/viewBox 请手动输入",
+    title: l10n.t("Enter base width"),
+    prompt: l10n.t("Used for exporting PNGs at multiple scales"),
     value: "512",
     validateInput: (value) => {
       const parsed = Number(value.trim());
-      return Number.isFinite(parsed) && parsed > 0 ? undefined : "请输入大于 0 的数字";
+      return Number.isFinite(parsed) && parsed > 0 ? undefined : l10n.t("Please enter a number greater than 0");
     }
   });
 
@@ -140,7 +141,7 @@ async function chooseOutputDirectory(
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: "选择导出目录"
+    openLabel: l10n.t("Select export directory")
   });
   return picked?.[0];
 }
@@ -158,7 +159,7 @@ export async function runTextOperation(
   return applySvgTransform(
     document,
     (svg) => transformByOperation(svg, operation),
-    `SVG ${OPERATION_LABELS[operation]}完成。`,
+    l10n.t("SVG {0} complete", OPERATION_LABELS[operation]),
     options
   );
 }
@@ -176,12 +177,12 @@ export async function runQuickRecolor(
   const palette = extractColorPalette(source);
   const fromPick = await vscode.window.showQuickPick(
     [
-      { label: "全部颜色", description: "替换 fill/stroke 等所有可识别颜色", picked: true },
+      { label: l10n.t("All colors"), description: l10n.t("Replace all recognizable colors such as fill/stroke"), picked: true },
       ...palette.map((color) => ({ label: color }))
     ],
     {
-      title: "选择要替换的颜色",
-      placeHolder: "默认替换全部颜色"
+      title: l10n.t("Select the color to replace"),
+      placeHolder: l10n.t("Replace all colors by default")
     }
   );
   if (!fromPick) {
@@ -189,8 +190,8 @@ export async function runQuickRecolor(
   }
 
   const toColor = await vscode.window.showInputBox({
-    title: "目标颜色",
-    prompt: "输入目标颜色（如 #22c55e）",
+    title: l10n.t("Target color"),
+    prompt: l10n.t("Enter the target color"),
     value: "#22c55e",
     validateInput: validateColorInput
   });
@@ -198,13 +199,13 @@ export async function runQuickRecolor(
     return false;
   }
 
-  const fromColor = fromPick.label === "全部颜色" ? undefined : fromPick.label;
+  const fromColor = fromPick.label === l10n.t("All colors") ? undefined : fromPick.label;
   return applySvgTransform(
     document,
     (svg) => quickRecolorSvg(svg, toColor.trim(), fromColor),
     fromColor
-      ? `已将颜色 ${fromColor} 替换为 ${toColor.trim()}。`
-      : `已将全部可识别颜色替换为 ${toColor.trim()}。`,
+      ? l10n.t("The color {0} has been replaced with {1}", fromColor, toColor.trim())
+      : l10n.t("All recognizable colors have been replaced with {0}", toColor.trim()),
     options
   );
 }
@@ -216,14 +217,14 @@ export async function runExportPng(uri?: vscode.Uri): Promise<boolean> {
   }
 
   const widthInput = await vscode.window.showInputBox({
-    title: "PNG 宽度（可选）",
-    prompt: "留空则使用 SVG 原始尺寸",
+    title: l10n.t("PNG width (optional)"),
+    prompt: l10n.t("If left blank the original SVG size is used"),
     validateInput: (value) => {
       if (!value.trim()) {
         return undefined;
       }
       const numeric = Number(value.trim());
-      return Number.isFinite(numeric) && numeric > 0 ? undefined : "请输入大于 0 的数字";
+      return Number.isFinite(numeric) && numeric > 0 ? undefined : l10n.t("Please enter a number greater than 0");
     }
   });
   if (widthInput === undefined) {
@@ -231,7 +232,7 @@ export async function runExportPng(uri?: vscode.Uri): Promise<boolean> {
   }
 
   const targetUri = await vscode.window.showSaveDialog({
-    saveLabel: "导出 PNG",
+    saveLabel: l10n.t("Export PNG"),
     filters: { PNG: ["png"] },
     defaultUri: suggestPngUri(document)
   });
@@ -242,7 +243,7 @@ export async function runExportPng(uri?: vscode.Uri): Promise<boolean> {
   const width = widthInput.trim() ? Number(widthInput.trim()) : undefined;
   const png = renderSvgToPng(document.getText(), width);
   await vscode.workspace.fs.writeFile(targetUri, png);
-  vscode.window.showInformationMessage(`PNG 已导出：${targetUri.fsPath}`);
+  vscode.window.showInformationMessage(l10n.t("PNGs exported: {0}", targetUri.fsPath));
   return true;
 }
 
@@ -253,10 +254,10 @@ export async function runExportPngVariants(uri?: vscode.Uri): Promise<boolean> {
   }
 
   const scalesInput = await vscode.window.showInputBox({
-    title: "导出倍率",
-    prompt: "输入倍率列表，逗号分隔（例如 1,2,3）",
+    title: l10n.t("Export magnification"),
+    prompt: l10n.t("Enter a list of multipliers, separated by commas"),
     value: "1,2,3",
-    validateInput: (value) => (parseScales(value) ? undefined : "请输入有效数字列表，如 1,2,3")
+    validateInput: (value) => (parseScales(value) ? undefined : l10n.t("Please enter a list of valid numbers, such as 1,2,3"))
   });
   if (!scalesInput) {
     return false;
@@ -264,7 +265,7 @@ export async function runExportPngVariants(uri?: vscode.Uri): Promise<boolean> {
 
   const scales = parseScales(scalesInput);
   if (!scales) {
-    vscode.window.showErrorMessage("倍率解析失败。");
+    vscode.window.showErrorMessage(l10n.t("Ratio analysis failed"));
     return false;
   }
 
@@ -293,7 +294,7 @@ export async function runExportPngVariants(uri?: vscode.Uri): Promise<boolean> {
     outputs.push(fileName);
   }
 
-  vscode.window.showInformationMessage(`已导出 ${outputs.length} 个 PNG：${outputs.join(", ")}`);
+  vscode.window.showInformationMessage(l10n.t("{0} PNGs exported: {1}", outputs.length, outputs.join(", ")));
   return true;
 }
 
@@ -305,15 +306,15 @@ export async function runExtractPalette(uri?: vscode.Uri): Promise<boolean> {
 
   const colors = extractColorPalette(document.getText());
   if (!colors.length) {
-    vscode.window.showWarningMessage("未识别到可提取颜色。");
+    vscode.window.showWarningMessage(l10n.t("No extractable color was detected"));
     return false;
   }
 
   const picked = await vscode.window.showQuickPick(
-    colors.map((color) => ({ label: color, description: "点击复制颜色值" })),
+    colors.map((color) => ({ label: color, description: l10n.t("Click to copy the color value") })),
     {
-      title: "SVG 调色板",
-      placeHolder: "选择一个颜色复制到剪贴板"
+      title: l10n.t("SVG color palette"),
+      placeHolder: l10n.t("Select a color and copy it to the clipboard")
     }
   );
   if (!picked) {
@@ -321,8 +322,6 @@ export async function runExtractPalette(uri?: vscode.Uri): Promise<boolean> {
   }
 
   await vscode.env.clipboard.writeText(picked.label);
-  vscode.window.showInformationMessage(`已复制颜色：${picked.label}`);
+  vscode.window.showInformationMessage(l10n.t("Color copied: {0}", picked.label));
   return true;
 }
-
-

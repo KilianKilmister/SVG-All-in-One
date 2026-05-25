@@ -26,6 +26,7 @@ English | [简体中文](./README.zh-CN.md)
   - Tag completion
   - Attribute completion
   - Common attribute value completion
+- Localized UI (EN, CN)
 
 ## Usage
 

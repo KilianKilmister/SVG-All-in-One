@@ -10,6 +10,7 @@
     "color": "#F1F5F9",
     "theme": "light"
   },
+	"l10n": "./l10n",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -34,25 +35,15 @@
     "url": "https://github.com/Robin-zero/SVG-All-in-One.git"
   },
   "activationEvents": [
-    "onLanguage:svg",
-    "onCommand:svgAllInOne.openPanel",
-    "onCommand:svgAllInOne.editAttribute",
-    "onCommand:svgAllInOne.addAttribute",
-    "onCommand:svgAllInOne.removeAttribute",
-    "onCommand:svgAllInOne.exportPng",
-    "onCommand:svgAllInOne.exportPngVariants",
-    "onCommand:svgAllInOne.quickRecolor",
-    "onCommand:svgAllInOne.cleanupSvg",
-    "onCommand:svgAllInOne.compressSvg",
-    "onCommand:svgAllInOne.formatSvg",
-    "onCommand:svgAllInOne.extractPalette"
+    "onLanguage:svg"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "svgAllInOne.openPanel",
-        "title": "SVG All in One: Open Split Editor + Preview",
+        "title": "%svgAllInOne.openPanel.title%",
+        "shortTitle": "%svgAllInOne.openPanel.short%",
         "icon": {
           "light": "resources/light/open-preview.svg",
           "dark": "resources/dark/open-preview.svg"
@@ -60,7 +51,8 @@
       },
       {
         "command": "svgAllInOne.exportPng",
-        "title": "SVG All in One: Export PNG",
+        "title": "%svgAllInOne.exportPng.title%",
+        "shortTitle": "%svgAllInOne.exportPng.short%",
         "icon": {
           "light": "resources/light/export-png.svg",
           "dark": "resources/dark/export-png.svg"
@@ -68,46 +60,56 @@
       },
       {
         "command": "svgAllInOne.exportPngVariants",
-        "title": "SVG All in One: Export PNG Variants (@1x/@2x/@3x)"
+        "title": "%svgAllInOne.exportPngVariants.title%",
+        "shortTitle": "%svgAllInOne.exportPngVariants.short%"
       },
       {
         "command": "svgAllInOne.quickRecolor",
-        "title": "SVG All in One: Quick Recolor"
+        "title": "%svgAllInOne.quickRecolor.title%",
+        "shortTitle": "%svgAllInOne.quickRecolor.short%"
       },
       {
         "command": "svgAllInOne.cleanupSvg",
-        "title": "SVG All in One: Cleanup Useless XML"
+        "title": "%svgAllInOne.cleanupSvg.title%",
+        "shortTitle": "%svgAllInOne.cleanupSvg.short%"
       },
       {
         "command": "svgAllInOne.compressSvg",
-        "title": "SVG All in One: Compress SVG (SVGO)"
+        "title": "%svgAllInOne.compressSvg.title%",
+        "shortTitle": "%svgAllInOne.compressSvg.short%"
       },
       {
         "command": "svgAllInOne.formatSvg",
-        "title": "SVG All in One: Format SVG"
+        "title": "%svgAllInOne.formatSvg.title%",
+        "shortTitle": "%svgAllInOne.formatSvg.short%"
       },
       {
         "command": "svgAllInOne.extractPalette",
-        "title": "SVG All in One: Extract Color Palette"
+        "title": "%svgAllInOne.extractPalette.title%",
+        "shortTitle": "%svgAllInOne.extractPalette.short%"
       },
       {
         "command": "svgAllInOne.editAttribute",
-        "title": "SVG All in One: Edit Selected Attribute"
+        "title": "%svgAllInOne.editAttribute.title%",
+        "shortTitle": "%svgAllInOne.editAttribute.short%"
       },
       {
         "command": "svgAllInOne.addAttribute",
-        "title": "SVG All in One: Add Attribute"
+        "title": "%svgAllInOne.addAttribute.title%",
+        "shortTitle": "%svgAllInOne.addAttribute.short%"
       },
       {
         "command": "svgAllInOne.removeAttribute",
-        "title": "SVG All in One: Remove Attribute"
+        "title": "%svgAllInOne.removeAttribute.title%",
+        "shortTitle": "%svgAllInOne.removeAttribute.short%"
       }
     ],
     "views": {
       "explorer": [
         {
+          "icon": "./resources/marketplace/icon.svg",
           "id": "svgAllInOne.attributePanel",
-          "name": "SVG Selected Node Attributes"
+          "name": "%svgAllInOne.attributePanel.name%"
         }
       ]
     },
@@ -173,6 +175,7 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@vscode/l10n": "^0.0.18",
     "@xmldom/xmldom": "^0.8.10",
     "svgo": "^3.3.2",
     "xml-formatter": "^3.6.7"
@@ -180,6 +183,7 @@
   "devDependencies": {
     "@types/node": "^22.13.10",
     "@types/vscode": "^1.95.0",
+    "@vscode/l10n-dev": "^0.0.35",
     "typescript": "^5.8.2"
   }
 }
